@@ -1,6 +1,6 @@
 # Touareg — питомец для Windows
 
-[Скачать приложение для Windows](https://github.com/nzyqjv9hgp-web/touareg-pet/releases/latest) · [Архив исходников](https://github.com/nzyqjv9hgp-web/touareg-pet/releases/download/v1.0.1/Touareg-Windows-source.zip)
+[Скачать приложение для Windows](https://github.com/nzyqjv9hgp-web/touareg-pet/releases/latest) · [Архив исходников](https://github.com/nzyqjv9hgp-web/touareg-pet/releases/latest/download/Touareg-Windows-source.zip)
 
 Самостоятельное приложение для Windows 10/11 x64: прозрачная машина поверх рабочего стола, езда по верхним краям обычных окон, прыжки с рампы с окна на окно, падения с краёв, удары о стены экрана, езда по панели задач через все мониторы, перетаскивание мышью, бернаут с дымом и настоящий записанный V8. Первый запуск устанавливает файлы только в профиль текущего пользователя, создаёт ярлык на рабочем столе и открывает настройки. Администратор и отдельная установка .NET не нужны.
 
