@@ -81,7 +81,8 @@ internal sealed class Renderer(Sprites sprites) : IDisposable
     // Hover conversion: the wheels turn flat under the car (as on the time machine) and fire jets downwards.
     void DrawHover(Graphics g, World world, Scaled frames, int frame, double scale, RectangleF body)
     {
-        float n = body.Width, r = (float)(31 * scale), well = (float)(35 * scale), fold = (float)world.Hover;
+        // The sprite's tyres reach ~44 px from the wheel centre (512 px frame).
+        float n = body.Width, r = (float)(44 * scale), well = (float)(47 * scale), fold = (float)world.Hover;
         var wheels = sprites.Wheels[frame].Select(w => new PointF((float)((w.X - 256) * scale), (float)((w.Y - 410) * scale))).ToArray();
         // Body without the wheels painted into the sprite.
         using (var outside = new Region(body))
