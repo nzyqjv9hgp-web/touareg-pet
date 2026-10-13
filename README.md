@@ -87,6 +87,6 @@ Workflow `Release` (`.github/workflows/release.yml`, запуск вручную
 
 ## Звук и лицензии
 
-«Acceleration sounds of Ford V8 5 Liter engine» — noiseloop, [оригинал](https://freesound.org/people/noiseloop/sounds/455926/), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Из записи нарезаны фрагменты разгона и езды, выровнена громкость, сглажены стыки. Скорость воспроизведения и высота тона сохранены. Атрибуция встроена в настройки и в `Assets/audio/CREDITS.md`. Звуки удара о стену и приземления не записи: они синтезируются в `Core/ImpactSound.cs`.
+«Acceleration sounds of Ford V8 5 Liter engine» — noiseloop, [оригинал](https://freesound.org/people/noiseloop/sounds/455926/), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Из записи нарезаны фрагменты разгона и езды, выровнена громкость, сглажены стыки. Скорость воспроизведения и высота тона сохранены. Атрибуция встроена в настройки и в `Assets/audio/CREDITS.md`. Звуки удара о стену и приземления не записи: они синтезируются в `Core/ImpactSound.cs` — 5 вариантов удара и 4 варианта приземления, которые не повторяются подряд и немного меняют высоту и громкость.
 
 NAudio 2.2.1 — MIT, текст лицензии в `Assets/NAudio-LICENSE.txt`. Среда .NET распространяется вместе с приложением; уведомления Microsoft включены в пользовательский пакет. Графические кадры сделаны для этого проекта.

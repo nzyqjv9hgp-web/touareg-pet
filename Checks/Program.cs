@@ -154,10 +154,16 @@ audio.Set("drive", 0); for (int i = 0; i < 10; i++) audio.Read(buffer, 0, buffer
 Assert(Rms(buffer) < .00001, "Volume zero silences actual output");
 audio.Set("drive", .45f); audio.Read(buffer, 0, buffer.Length); Assert(Rms(buffer) > .005, "Changing volume restores real driving audio");
 
-float[] crashSound = ImpactSound.Crash(), thudSound = ImpactSound.Thud();
-Assert(crashSound.Max(Math.Abs) > .5 && crashSound[^1] == 0 && thudSound.Max(Math.Abs) > .5 && thudSound[^1] == 0, "Synthesized crash and landing sounds are loud and end in silence");
+var allImpacts = ImpactSound.Crashes().Concat(ImpactSound.Landings()).ToList();
+Assert(ImpactSound.Crashes().Length >= 5 && ImpactSound.Landings().Length >= 4
+    && allImpacts.All(x => x.Max(Math.Abs) > .5 && x[^1] == 0 && x.All(float.IsFinite)), "Several synthesized crash and landing sounds, all loud, finite and ending in silence");
+Assert(allImpacts.Select(x => x.Length + ":" + string.Join(",", x.Take(4000).Where((_, i) => i % 400 == 0).Select(v => Math.Round(v, 3)))).Distinct().Count() == allImpacts.Count, "Every impact variant sounds different");
+var bank = new ImpactBank(1); var picks = Enumerable.Range(0, 200).Select(i => bank.Next(new Impact(i % 3 / 2.0, true))).ToList();
+Assert(picks.Zip(picks.Skip(1)).All(p => p.First.Variant != p.Second.Variant) && picks.Select(p => p.Variant).Distinct().Count() == bank.Variants(true)
+    && picks.Select(p => p.Pitch).Distinct().Count() > 50, "Crashes rotate through all variants, never repeat back to back, and vary in pitch");
+float[] crashSound = ImpactSound.Crashes()[0];
 audio.Set("silent", .45f); for (int i = 0; i < 4; i++) audio.Read(buffer, 0, buffer.Length);
-audio.Play(crashSound, 1); audio.Read(buffer, 0, buffer.Length);
+audio.Play(crashSound, 1, .9f); audio.Read(buffer, 0, buffer.Length);
 Assert(Rms(buffer) > .02, "Crash sound plays over a silent engine");
 for (int i = 0; i < 8; i++) audio.Read(buffer, 0, buffer.Length);
 Assert(buffer.All(x => x == 0), "Crash sound finishes and leaves silence");

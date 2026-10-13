@@ -6,7 +6,7 @@ namespace Touareg.Windows;
 internal sealed class EngineAudio : ISampleProvider, IDisposable
 {
     readonly EngineSamples samples;
-    readonly float[] crash = ImpactSound.Crash(), thud = ImpactSound.Thud();
+    readonly ImpactBank impacts = new(Environment.TickCount);
     WaveOutEvent? output;
     bool failed;
     internal event Action<string>? Error;
@@ -20,7 +20,7 @@ internal sealed class EngineAudio : ISampleProvider, IDisposable
     {
         bool audible = !world.Paused && !hidden && settings.Sound, played = false;
         while (world.Impacts.TryDequeue(out var hit))
-            if (audible) { samples.Play(hit.Metal ? crash : thud, (float)(.35 + .65 * hit.Strength)); played = true; }
+            if (audible) { var (sound, _, pitch, gain) = impacts.Next(hit); samples.Play(sound, gain, pitch); played = true; }
         bool active = world.EngineArmed && audible;
         if ((active || played) && output is null && !failed)
         {

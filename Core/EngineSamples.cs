@@ -43,11 +43,17 @@ public sealed class EngineSamples(Pcm burnout, Pcm drive)
             return Pcm.Samples[Position++];
         }
     }
-    sealed class Shot(float[] mono, float gain)
+    sealed class Shot(float[] mono, float gain, float pitch)
     {
         public readonly float[] Mono = mono;
-        public readonly float Gain = gain;
-        public int Position;
+        public readonly float Gain = gain, Step = pitch;
+        public double Position;
+        // Linear interpolation lets a shot play slightly higher or lower.
+        public float Sample()
+        {
+            int i = (int)Position; float f = (float)(Position - i);
+            return i + 1 < Mono.Length ? Mono[i] + (Mono[i + 1] - Mono[i]) * f : Mono[i];
+        }
     }
     readonly object gate = new();
     readonly List<Shot> shots = [];
@@ -67,12 +73,12 @@ public sealed class EngineSamples(Pcm burnout, Pcm drive)
         }
     }
     // Mono one-shot mixed over the engine on both channels, e.g. a crash or a landing.
-    public void Play(float[] mono, float strength)
+    public void Play(float[] mono, float strength, float pitch = 1)
     {
         lock (gate)
         {
             if (shots.Count >= 6) shots.RemoveAt(0);
-            shots.Add(new(mono, Math.Clamp(strength, 0, 1)));
+            shots.Add(new(mono, Math.Clamp(strength, 0, 1), Math.Clamp(pitch, .5f, 2f)));
         }
     }
 
@@ -95,9 +101,9 @@ public sealed class EngineSamples(Pcm burnout, Pcm drive)
                 for (int k = shots.Count - 1; k >= 0; k--)
                 {
                     var shot = shots[k];
-                    value += shot.Mono[shot.Position] * shot.Gain;
+                    value += shot.Sample() * shot.Gain;
                     // Interleaved stereo: advance the mono shot after the right channel.
-                    if ((offset + i) % 2 == 1 && ++shot.Position >= shot.Mono.Length) shots.RemoveAt(k);
+                    if ((offset + i) % 2 == 1 && (shot.Position += shot.Step) >= shot.Mono.Length) shots.RemoveAt(k);
                 }
                 buffer[offset + i] = value * gain;
             }
