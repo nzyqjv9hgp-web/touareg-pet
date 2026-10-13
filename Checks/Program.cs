@@ -196,7 +196,7 @@ if (args.Length is 3 or 4)
 {
     var ownRelease = UpdateSecurity.Verify(File.ReadAllText(args[1]), File.ReadAllText(Path.Combine(root, "update-public.pem")), "0.0.0");
     UpdateSecurity.VerifyFile(args[0], ownRelease);
-    Assert(ownRelease.Version == (args.Length == 4 ? args[3] : "1.1.0"), "Verifies the actual delivered EXE using the pinned production key");
+    Assert(ownRelease.Version == (args.Length == 4 ? args[3] : "1.1.1"), "Verifies the actual delivered EXE using the pinned production key");
     using var assembly = new System.Reflection.PortableExecutable.PEReader(File.OpenRead(args[2]));
     var metadata = System.Reflection.Metadata.PEReaderExtensions.GetMetadataReader(assembly);
     var names = metadata.ManifestResources.Select(handle => metadata.GetString(metadata.GetManifestResource(handle).Name).Replace('\\', '/')).ToList();
