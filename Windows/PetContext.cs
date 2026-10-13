@@ -20,6 +20,7 @@ internal sealed class PetContext : ApplicationContext
     SettingsWindow? preferences;
     double last, scan;
     bool hidden, disposed;
+    Native.Point press;
 
     internal PetContext(bool welcome)
     {
@@ -27,20 +28,24 @@ internal sealed class PetContext : ApplicationContext
         var menu = new ContextMenuStrip();
         pause.Click += (_, _) => SetPause(!world.Paused);
         menu.Items.Add(pause);
-        menu.Items.Add("Вернуть питомца", null, (_, _) => { Apply(); world.SetSurfaces(Desktop.Scan(world.CarWidth)); world.Reset(); });
+        menu.Items.Add("Вернуть питомца", null, (_, _) => { Apply(); Rescan(); world.Reset(); });
         menu.Items.Add("Настройки…", null, (_, _) => Preferences()); menu.Items.Add(new ToolStripSeparator());
         updateItem.Click += async (_, _) => { await updater.Check(); if (!updater.Ready) Balloon(updater.Status); };
         restart.Click += (_, _) => { Process.Start(new ProcessStartInfo(Install.Launcher) { UseShellExecute = true }); ExitThread(); };
         menu.Items.Add(updateItem); menu.Items.Add(restart); menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Выход", null, (_, _) => ExitThread());
         tray = new() { Icon = Assets.Icon(), Visible = true, Text = "Мини-я на Touareg", ContextMenuStrip = menu };
-        tray.DoubleClick += (_, _) => Preferences(); pet.ContextMenuStrip = menu;
-        pet.MouseDown += (_, e) => { if (e.Button == MouseButtons.Left) { world.Hold(true); pet.Capture = true; } };
+        tray.DoubleClick += (_, _) => Preferences(); pet.ContextMenuStrip = menu; pet.Cursor = Cursors.Hand;
+        pet.MouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Left) return;
+            Native.GetCursorPos(out press); world.Grab(press.X, press.Y); world.Hold(true); pet.Capture = true;
+        };
         pet.MouseUp += (_, e) => { if (e.Button == MouseButtons.Left) { world.Hold(false); pet.Capture = false; } };
         pet.MouseCaptureChanged += (_, _) => { if (!pet.Capture) world.Hold(false); };
         audio.Error += message => pet.BeginInvoke(() => { Log.Write("audio", new Exception(message)); Balloon("Звук пока недоступен. Питомец продолжает работать."); });
         updater.Changed += () => { restart.Visible = updater.Ready; preferences?.UpdateStatus(updater.Status); };
-        Apply(); world.SetSurfaces(Desktop.Scan(world.CarWidth));
+        Apply(); Rescan();
         effects.Show(); pet.Show(); renderer.Draw(world, pet, effects);
         timer.Tick += (_, _) => Tick(); timer.Start();
         updateTimer.Tick += async (_, _) =>
@@ -54,6 +59,7 @@ internal sealed class PetContext : ApplicationContext
     }
 
     void Apply() { world.CarWidth = settings.Size; world.Speed = settings.Speed / 100.0; }
+    void Rescan() { world.SetScreens(Desktop.Screens()); world.SetSurfaces(Desktop.Scan(world.CarWidth)); }
     void SetPause(bool value)
     {
         world.Hold(false); pet.Capture = false; world.Paused = value; pause.Checked = value;
@@ -64,7 +70,7 @@ internal sealed class PetContext : ApplicationContext
         double now = clock.Elapsed.TotalSeconds, dt = Math.Clamp(now - last, 0, .10); last = now; scan += dt;
         if (scan >= .35)
         {
-            scan = 0; Apply(); world.SetSurfaces(Desktop.Scan(world.CarWidth));
+            scan = 0; Apply(); Rescan();
             bool next = settings.HideFullscreen && Desktop.Fullscreen();
             if (next != hidden)
             {
@@ -75,6 +81,12 @@ internal sealed class PetContext : ApplicationContext
             Native.SetWindowPos(pet.Handle, (IntPtr)(-1), 0, 0, 0, 0, 0x13);
         }
         if (world.Held && (Native.GetAsyncKeyState(1) & 0x8000) == 0) { world.Hold(false); pet.Capture = false; }
+        // Holding still is a burnout; moving the mouse while holding picks the car up.
+        if (world.Held && Native.GetCursorPos(out var cursor))
+        {
+            if (!world.Dragging && Math.Abs(cursor.X - press.X) + Math.Abs(cursor.Y - press.Y) > 6) world.BeginDrag();
+            if (world.Dragging) world.DragTo(cursor.X, cursor.Y);
+        }
         if (!hidden) world.Step(dt);
         audio.Sync(world, settings, hidden);
         if (!hidden) renderer.Draw(world, pet, effects);
@@ -83,7 +95,7 @@ internal sealed class PetContext : ApplicationContext
     {
         if (preferences is not null && !preferences.IsDisposed) { preferences.Show(); preferences.Activate(); return; }
         preferences = new(settings, updater.Status);
-        preferences.Changed += () => { Apply(); world.SetSurfaces(Desktop.Scan(world.CarWidth)); settings.Save(); };
+        preferences.Changed += () => { Apply(); Rescan(); settings.Save(); };
         preferences.CheckUpdates += async () => await updater.Check();
         preferences.Show();
     }

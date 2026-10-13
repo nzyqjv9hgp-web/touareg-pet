@@ -45,11 +45,20 @@ internal static class Desktop
         foreach (var screen in Screen.AllScreens)
         {
             var r = screen.WorkingArea;
-            var monitor = Native.MonitorFromPoint(new(r.Left + r.Width / 2, r.Top + r.Height / 2), 2);
-            Native.GetDpiForMonitor(monitor, 0, out uint dpi, out _);
-            result.Add(new(-i++, r.Left + 8, r.Right - 8, r.Bottom - 1, dpi >= 96 ? dpi : 96, true));
+            result.Add(new(-i++, r.Left + 8, r.Right - 8, r.Bottom - 1, Dpi(r), true));
         }
         return result;
+    }
+
+    // Whole monitors: the car can fly between them, their outer edges are walls.
+    internal static List<Area> Screens() =>
+        Screen.AllScreens.Select(s => new Area(s.Bounds.Left, s.Bounds.Top, s.Bounds.Right, s.Bounds.Bottom, Dpi(s.Bounds))).ToList();
+
+    static double Dpi(Rectangle r)
+    {
+        var monitor = Native.MonitorFromPoint(new(r.Left + r.Width / 2, r.Top + r.Height / 2), 2);
+        Native.GetDpiForMonitor(monitor, 0, out uint dpi, out _);
+        return dpi >= 96 ? dpi : 96;
     }
 
     internal static bool Fullscreen()

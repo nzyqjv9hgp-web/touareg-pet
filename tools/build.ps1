@@ -1,4 +1,4 @@
-param([string]$Version = "1.0.1", [string]$Output = "")
+param([string]$Version = "1.1.0", [string]$Output = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 if (!$Output) { $Output = Join-Path $root "dist" }
