@@ -1,0 +1,33 @@
+name: Windows
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Checks
+        run: dotnet run --project Checks/Checks.csproj -c Release
+      - name: Build EXE
+        run: dotnet publish Windows/TouaregPet.csproj -c Release -r win-x64 --self-contained true -o dist
+      - name: Smoke test on the real desktop
+        shell: powershell
+        run: ./tools/smoke.ps1 -Exe dist/TouaregPet.exe -Out smoke
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshots
+          path: smoke/
+          if-no-files-found: ignore
