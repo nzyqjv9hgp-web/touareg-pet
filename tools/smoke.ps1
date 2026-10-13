@@ -149,3 +149,12 @@ else { Pass "No diagnostics.log errors" }
 if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
 if ($failures.Count) { Write-Host "$($failures.Count) smoke check(s) failed"; exit 1 }
 Write-Host "Smoke test passed"
+
+# Preserve exactly the EXE that passed the desktop test in the existing smoke artifact.
+# Signing can then happen locally without copying the private update key to the runner.
+$build = Join-Path $Out "build"
+New-Item -ItemType Directory -Force $build | Out-Null
+Copy-Item (Resolve-Path $Exe).Path (Join-Path $build "TouaregPet.exe")
+$assembly = Join-Path $PSScriptRoot "../Windows/bin/Release/net10.0-windows/win-x64/TouaregPet.dll"
+Copy-Item $assembly (Join-Path $build "TouaregPet.dll")
+Write-Host "Tested EXE and embedded-resource assembly saved to $build"
