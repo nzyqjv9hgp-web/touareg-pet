@@ -135,7 +135,7 @@ if ($final.X -ge $wa.Left -and $final.X -le $wa.Right -and $final.Y -le $wa.Bott
 
 # A quick click must not break anything.
 $c = Car $pet; $hit = $null
-foreach ($dy in -45, -30, -60) { foreach ($ox in 0, -25, 25) { if (-not $hit -and [Win]::At($c.X + $ox, $c.Y + $dy) -eq $pet) { $hit = @($c.X + $ox, $c.Y + $dy) } } }
+foreach ($dy in -45, -30, -60) { foreach ($ox in 0, -25, 25) { if (-not $hit -and [Win]::At($c.X + $ox, $c.Y + $dy) -eq $pet) { $hit = @(($c.X + $ox), ($c.Y + $dy)) } } }
 if ($hit) { [Win]::SetCursorPos($hit[0], $hit[1]) | Out-Null; [Win]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 40; [Win]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero) }
 [Win]::SetCursorPos(5, 5) | Out-Null
 Start-Sleep -Seconds 3
