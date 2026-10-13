@@ -82,7 +82,9 @@ internal sealed class PetContext : ApplicationContext
             else { effects.Show(); pet.Show(); }
         }
         if (topmost >= .5) { topmost = 0; Native.SetWindowPos(pet.Handle, (IntPtr)(-1), 0, 0, 0, 0, 0x13); }
-        if (world.Held && (Native.GetAsyncKeyState(1) & 0x8000) == 0) { world.Hold(false); pet.Capture = false; }
+        // GetAsyncKeyState reads physical buttons: with swapped buttons the primary one is the right button.
+        int primary = Native.GetSystemMetrics(23) != 0 ? 2 : 1;
+        if (world.Held && (Native.GetAsyncKeyState(primary) & 0x8000) == 0) { world.Hold(false); pet.Capture = false; }
         // Holding still is a burnout; moving the mouse while holding picks the car up.
         if (world.Held && Native.GetCursorPos(out var cursor))
         {

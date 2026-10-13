@@ -5,8 +5,10 @@ $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms
-Add-Type @"
+Add-Type -ReferencedAssemblies System.Drawing @"
 using System;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
 public static class Win
@@ -37,6 +39,23 @@ public static class Win
         }, IntPtr.Zero);
         return found;
     }
+    [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr h);
+    [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr h, IntPtr dc);
+    [DllImport("gdi32.dll")] public static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, uint rop);
+    // SRCCOPY | CAPTUREBLT: includes layered (per-pixel alpha) windows such as the pet.
+    public static void Capture(string path, int left, int top, int width, int height)
+    {
+        using (var bmp = new Bitmap(width, height))
+        {
+            using (var g = Graphics.FromImage(bmp))
+            {
+                IntPtr dst = g.GetHdc(), src = GetDC(IntPtr.Zero);
+                BitBlt(dst, 0, 0, width, height, src, left, top, 0x40CC0020);
+                ReleaseDC(IntPtr.Zero, src); g.ReleaseHdc(dst);
+            }
+            bmp.Save(path, ImageFormat.Png);
+        }
+    }
     public static IntPtr At(int x, int y) { var p = new POINT { X = x, Y = y }; return GetAncestor(WindowFromPoint(p), 2); }
 }
 "@
@@ -47,10 +66,7 @@ function Pass($text) { Write-Host "PASS $text" }
 function Shot($name)
 {
     $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
-    $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size, [System.Drawing.CopyPixelOperation]::SourceCopy -bor [System.Drawing.CopyPixelOperation]::CaptureBlt)
-    $bmp.Save("$Out/$name.png", [System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose()
+    try { [Win]::Capture("$Out/$name.png", $b.Left, $b.Top, $b.Width, $b.Height) } catch { Write-Host "Screenshot $name failed: $_" }
 }
 function Car($hwnd)
 {
@@ -61,7 +77,6 @@ function Car($hwnd)
 
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen
 Write-Host "Screen $($screen.Bounds) working area $($screen.WorkingArea)"
-$env:TOUAREG_SMOKE = "1"
 $process = Start-Process -FilePath (Resolve-Path $Exe).Path -ArgumentList "--installed" -PassThru
 Start-Sleep -Seconds 8
 if ($process.HasExited) { throw "The pet exited during start-up with code $($process.ExitCode)" }

@@ -1,0 +1,99 @@
+name: Release
+
+# Builds, tests on a real Windows desktop, signs with the private update key and publishes a GitHub release.
+# Needs the repository secret UPDATE_SIGNING_KEY (contents of the RSA-3072 private PEM). Only people with
+# write access can start it; it never runs for pull requests, so forks cannot reach the key.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version X.Y.Z (must be newer than the current release)"
+        required: true
+      notes:
+        description: "Release notes (Markdown)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ inputs.version }}
+      TAG: v${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Validate version
+        shell: pwsh
+        env:
+          HAS_KEY: ${{ secrets.UPDATE_SIGNING_KEY != '' }}
+        run: |
+          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') { throw "Version must be X.Y.Z" }
+          if (git ls-remote --tags origin "refs/tags/$env:TAG") { throw "$env:TAG already exists" }
+          if ($env:HAS_KEY -ne 'true') { throw "Repository secret UPDATE_SIGNING_KEY is missing" }
+      - name: Checks
+        run: dotnet run --project Checks/Checks.csproj -c Release
+      - name: Build EXE
+        run: dotnet publish Windows/TouaregPet.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ env.VERSION }} -o dist
+      - name: Smoke test on the real desktop
+        shell: powershell
+        run: ./tools/smoke.ps1 -Exe dist/TouaregPet.exe -Out smoke
+      - name: Sign update manifest
+        shell: pwsh
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          $key = Join-Path $env:RUNNER_TEMP "update-signing-private.pem"
+          try
+          {
+            [IO.File]::WriteAllText($key, $env:UPDATE_SIGNING_KEY)
+            dotnet run --project tools/ReleaseTool.csproj -c Release -- dist/TouaregPet.exe $env:VERSION "https://github.com/${{ github.repository }}/releases/download/$env:TAG/TouaregPet.exe" $key dist/update.json
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed" }
+          }
+          finally { Remove-Item $key -Force -ErrorAction SilentlyContinue }
+      - name: Verify the signed package with the pinned public key
+        shell: pwsh
+        run: |
+          dotnet run --project Checks/Checks.csproj -c Release -- dist/TouaregPet.exe dist/update.json Windows/bin/Release/net10.0-windows/win-x64/TouaregPet.dll $env:VERSION | Tee-Object -FilePath dist/checks.txt
+          if ($LASTEXITCODE -ne 0) { throw "Release verification failed" }
+      - name: Package
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist/TouaregPet.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $package = "package/Touareg-Windows-x64"
+          New-Item -ItemType Directory -Force "$package/licenses" | Out-Null
+          Copy-Item dist/TouaregPet.exe $package
+          "$hash  TouaregPet.exe" | Set-Content -Encoding ascii dist/SHA256.txt
+          Copy-Item dist/SHA256.txt $package
+          Copy-Item licenses/* "$package/licenses"
+          Copy-Item Assets/audio/CREDITS.md "$package/licenses/AUDIO-CREDITS.md"
+          (Get-Content tools/release/START.md -Raw).Replace("{VERSION}", $env:VERSION) | Set-Content -Encoding utf8 "$package/НАЧНИ ЗДЕСЬ.md"
+          Copy-Item dist/checks.txt "$package/ПРОВЕРКИ.txt"
+          Compress-Archive -Path $package -DestinationPath dist/Touareg-Windows-x64.zip
+          git archive --format zip --prefix "Touareg-$env:VERSION/" -o dist/Touareg-Windows-source.zip HEAD
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          $notes = if ($env:NOTES) { $env:NOTES } else { "Touareg $env:VERSION для Windows 10/11 x64." }
+          $notes += "`n`n**Установка:** скачать ``Touareg-Windows-x64.zip``, распаковать и запустить ``TouaregPet.exe``. **Обновление:** меню питомца → «Проверить обновления» → «Перезапустить для обновления»; иначе автоматически в течение 6 часов.`n`nСобрано, проверено на рабочем столе Windows и подписано в GitHub Actions."
+          Set-Content -Encoding utf8 notes.md $notes
+          gh release create $env:TAG --target ${{ github.sha }} --title "Touareg $env:VERSION" --notes-file notes.md `
+            dist/TouaregPet.exe dist/update.json dist/SHA256.txt dist/Touareg-Windows-x64.zip dist/Touareg-Windows-source.zip
+      - name: Upload smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-screenshots
+          path: smoke/
+          if-no-files-found: ignore
