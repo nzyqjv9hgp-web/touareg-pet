@@ -1,0 +1,375 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Volkswagen Touareg (1st generation, 7L), side view facing right, drawn in 2.5D: flat shapes with
+       painted light and reflections. Real proportions: wheelbase 2855 mm = 266 px, so 0.093 px/mm.
+       Wheel centres at (124,410) and (390,410), tyre radius 35 (255/55 R18), ground at y = 445.
+       Layers, back to front: shadow, arches, tyre, brake, rim (rotates), wheelshade, body.
+       Wheel layers are centred at (0,0) and drawn once per wheel. -->
+  <defs>
+    <linearGradient id="paint" gradientUnits="userSpaceOnUse" x1="0" y1="285" x2="0" y2="418">
+      <stop offset="0" stop-color="#5c636d"/>
+      <stop offset=".05" stop-color="#2a2e35"/>
+      <stop offset=".40" stop-color="#121418"/>
+      <stop offset=".52" stop-color="#1a1d22"/>
+      <stop offset=".555" stop-color="#7d858f"/>
+      <stop offset=".585" stop-color="#2a2e35"/>
+      <stop offset=".72" stop-color="#14161a"/>
+      <stop offset=".86" stop-color="#0c0d10"/>
+      <stop offset=".93" stop-color="#262a30"/>
+      <stop offset="1" stop-color="#070708"/>
+    </linearGradient>
+    <linearGradient id="sky" gradientUnits="userSpaceOnUse" x1="0" y1="370" x2="0" y2="392">
+      <stop offset="0" stop-color="#9fb4c8" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#9fb4c8" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#9fb4c8" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="glass" gradientUnits="userSpaceOnUse" x1="0" y1="292" x2="0" y2="348">
+      <stop offset="0" stop-color="#5d7084"/>
+      <stop offset=".35" stop-color="#2b3744"/>
+      <stop offset="1" stop-color="#111820"/>
+    </linearGradient>
+    <linearGradient id="chrome" gradientUnits="objectBoundingBox" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7f9fb"/>
+      <stop offset=".45" stop-color="#9aa1aa"/>
+      <stop offset=".6" stop-color="#5f666f"/>
+      <stop offset="1" stop-color="#dfe3e7"/>
+    </linearGradient>
+    <linearGradient id="tail" gradientUnits="objectBoundingBox" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff5c5c"/>
+      <stop offset=".45" stop-color="#c0141d"/>
+      <stop offset="1" stop-color="#5e070b"/>
+    </linearGradient>
+    <linearGradient id="lamp" gradientUnits="objectBoundingBox" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f7fa"/>
+      <stop offset=".6" stop-color="#aab3bd"/>
+      <stop offset="1" stop-color="#6c7580"/>
+    </linearGradient>
+    <radialGradient id="lens" cx=".4" cy=".35" r=".7">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".5" stop-color="#c9d6e6"/>
+      <stop offset="1" stop-color="#4d5966"/>
+    </radialGradient>
+    <radialGradient id="tyre" cx="0" cy="0" r="35" gradientUnits="userSpaceOnUse">
+      <stop offset=".62" stop-color="#1b1c20"/>
+      <stop offset=".8" stop-color="#2c2e33"/>
+      <stop offset=".93" stop-color="#18191c"/>
+      <stop offset="1" stop-color="#0b0b0d"/>
+    </radialGradient>
+    <radialGradient id="disc" cx="0" cy="0" r="18" gradientUnits="userSpaceOnUse">
+      <stop offset=".25" stop-color="#3b3f45"/>
+      <stop offset=".3" stop-color="#8d939b"/>
+      <stop offset="1" stop-color="#5a6068"/>
+    </radialGradient>
+    <linearGradient id="spoke" gradientUnits="userSpaceOnUse" x1="-7" y1="0" x2="7" y2="0">
+      <stop offset="0" stop-color="#8e959e"/>
+      <stop offset=".45" stop-color="#eef1f4"/>
+      <stop offset="1" stop-color="#a3aab3"/>
+    </linearGradient>
+    <radialGradient id="light" cx="-10" cy="-14" r="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".22"/>
+      <stop offset=".5" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset=".75" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity=".45"/>
+    </radialGradient>
+    <radialGradient id="shadow" cx="270" cy="444" r="230" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 399.6) scale(1 .1)">
+      <stop offset="0" stop-color="#000000" stop-opacity=".45"/>
+      <stop offset=".75" stop-color="#000000" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="handle" gradientUnits="objectBoundingBox" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6c737c"/>
+      <stop offset=".35" stop-color="#22262c"/>
+      <stop offset="1" stop-color="#0b0c0e"/>
+    </linearGradient>
+    <radialGradient id="liner" cx="124" cy="410" r="42" gradientUnits="userSpaceOnUse">
+      <stop offset=".75" stop-color="#050506"/>
+      <stop offset="1" stop-color="#1c1e22"/>
+    </radialGradient>
+    <radialGradient id="linerF" cx="390" cy="410" r="42" gradientUnits="userSpaceOnUse">
+      <stop offset=".75" stop-color="#050506"/>
+      <stop offset="1" stop-color="#1c1e22"/>
+    </radialGradient>
+    <linearGradient id="sideL" gradientUnits="userSpaceOnUse" x1="164" y1="0" x2="196" y2="0">
+      <stop offset="0" stop-color="#000000" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="sideR" gradientUnits="userSpaceOnUse" x1="348" y1="0" x2="316" y2="0">
+      <stop offset="0" stop-color="#000000" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="glassV" gradientUnits="userSpaceOnUse" x1="0" y1="295" x2="0" y2="346">
+      <stop offset="0" stop-color="#6b7f93"/>
+      <stop offset=".3" stop-color="#2d3946"/>
+      <stop offset="1" stop-color="#0f151b"/>
+    </linearGradient>
+    <linearGradient id="horizon" gradientUnits="userSpaceOnUse" x1="0" y1="334" x2="0" y2="352">
+      <stop offset="0" stop-color="#c9d3dd" stop-opacity=".0"/>
+      <stop offset=".55" stop-color="#c9d3dd" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#c9d3dd" stop-opacity=".05"/>
+    </linearGradient>
+    <linearGradient id="hood" gradientUnits="userSpaceOnUse" x1="350" y1="0" x2="472" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".05"/>
+      <stop offset=".5" stop-color="#ffffff" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".05"/>
+    </linearGradient>
+    <linearGradient id="roof" gradientUnits="userSpaceOnUse" x1="100" y1="0" x2="309" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".05"/>
+      <stop offset=".6" stop-color="#ffffff" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".1"/>
+    </linearGradient>
+    <linearGradient id="ground" gradientUnits="userSpaceOnUse" x1="0" y1="398" x2="0" y2="414">
+      <stop offset="0" stop-color="#8b939c" stop-opacity="0"/>
+      <stop offset=".6" stop-color="#8b939c" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#8b939c" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="flare" gradientUnits="userSpaceOnUse" x1="0" y1="362" x2="0" y2="416">
+      <stop offset="0" stop-color="#6b737d"/>
+      <stop offset=".18" stop-color="#22262c"/>
+      <stop offset="1" stop-color="#0c0d10"/>
+    </linearGradient>
+    <clipPath id="bodyclip"><use href="#silhouette"/></clipPath>
+    <clipPath id="rearclip"><use href="#rearbody"/></clipPath>
+    <clipPath id="frontclip"><use href="#frontbody"/></clipPath>
+  </defs>
+  <g id="shadow">
+    <ellipse cx="270" cy="444" rx="232" ry="9" fill="url(#shadow)"/>
+  </g>
+  <g id="arches">
+    <path fill="url(#liner)" d="M 83 415 L 83 410 C 83 386.8 101.4 369 124 369 C 146.6 369 165 386.8 165 410 L 165 415 Z"/>
+    <path fill="url(#linerF)" d="M 349 415 L 349 410 C 349 386.8 367.4 369 390 369 C 412.6 369 431 386.8 431 410 L 431 415 Z"/>
+    <path fill="#1b1d21" d="M 104 382 C 116 378 132 378 144 382 L 142 386 C 130 383 118 383 106 386 Z M 370 382 C 382 378 398 378 410 382 L 408 386 C 396 383 384 383 372 386 Z"/>
+  </g>
+  <g id="tyre">
+    <g transform="scale(.943)">
+    <circle r="35" fill="url(#tyre)"/>
+    <circle r="30" fill="none" stroke="#3b3d42" stroke-width="1.6" stroke-dasharray="2.2 1.2 4 1.2 1.6 6" opacity=".8"/>
+    <circle r="25.2" fill="none" stroke="#2e3035" stroke-width="1"/>
+    <circle r="23.5" fill="#0d0d0f"/>
+    </g>
+  </g>
+  <g id="brake">
+    <g transform="scale(.943)">
+    <circle r="17.5" fill="url(#disc)"/>
+    <path fill="#3d4148" stroke="#1c1e22" stroke-width="1" d="M -15 -9 C -18 -2 -18 6 -15 11 L -9 8 C -11 4 -11 -1 -9 -5 Z"/>
+    </g>
+  </g>
+  <g id="rim">
+    <g transform="scale(.943)">
+    <circle r="23" fill="none" stroke="#d3d8de" stroke-width="2.4"/>
+    <circle r="21.6" fill="none" stroke="#7a818a" stroke-width=".8"/>
+    <path fill="url(#spoke)" d="M -3.6 -6 L -7.2 -19.8 C -3 -21.4 3 -21.4 7.2 -19.8 L 3.6 -6 Z"/>
+    <path fill="url(#spoke)" transform="rotate(72)" d="M -3.6 -6 L -7.2 -19.8 C -3 -21.4 3 -21.4 7.2 -19.8 L 3.6 -6 Z"/>
+    <path fill="url(#spoke)" transform="rotate(144)" d="M -3.6 -6 L -7.2 -19.8 C -3 -21.4 3 -21.4 7.2 -19.8 L 3.6 -6 Z"/>
+    <path fill="url(#spoke)" transform="rotate(216)" d="M -3.6 -6 L -7.2 -19.8 C -3 -21.4 3 -21.4 7.2 -19.8 L 3.6 -6 Z"/>
+    <path fill="url(#spoke)" transform="rotate(288)" d="M -3.6 -6 L -7.2 -19.8 C -3 -21.4 3 -21.4 7.2 -19.8 L 3.6 -6 Z"/>
+    <circle r="7" fill="#c3c9d0" stroke="#7a818a" stroke-width=".8"/>
+    <circle r="3.6" fill="#59606a"/>
+    <circle r="2" fill="#c3c9d0"/>
+    <g fill="#2a2d32">
+      <circle cx="0" cy="-4.6" r=".9"/><circle cx="4.4" cy="-1.4" r=".9"/><circle cx="2.7" cy="3.7" r=".9"/>
+      <circle cx="-2.7" cy="3.7" r=".9"/><circle cx="-4.4" cy="-1.4" r=".9"/>
+    </g>
+    </g>
+  </g>
+  <g id="wheelshade">
+    <g transform="scale(.943)">
+    <circle r="35" fill="url(#light)"/>
+    </g>
+  </g>
+  <g id="body">
+    <!-- arch flares -->
+    <path fill="url(#flare)" stroke="#050506" stroke-width="1.2" d="M 79 414 L 79 408 C 79 381 99 363 124 363 C 149 363 169 381 169 408 L 169 416 L 163 416 L 163 410 C 163 388 146 371 124 371 C 102 371 85 388 85 410 L 85 414 Z"/>
+    <path fill="url(#flare)" stroke="#050506" stroke-width="1.2" d="M 345 416 L 345 408 C 345 381 365 363 390 363 C 415 363 435 381 435 408 L 435 416 L 429 416 L 429 410 C 429 388 412 371 390 371 C 368 371 351 388 351 410 L 351 416 Z"/>
+    <path id="silhouette" fill="url(#paint)" stroke="#050506" stroke-width="1.6" stroke-linejoin="round" d="
+      M 62 410 C 57 404 56 398 56 392 L 57 372 C 58 362 60 352 62 344 C 64 330 68 316 76 306
+      C 82 298 90 292 100 290 C 160 287 230 285 270 286 C 278 286 284 288 288 292 L 330 333
+      C 370 335 420 340 452 346 C 468 350 476 354 479 360 L 482 382 C 484 394 483 404 478 414 L 434 416
+      L 431 410 C 431 387.4 412.6 369 390 369 C 367.4 369 349 387.4 349 410 L 349 416
+      L 165 416 L 165 410 C 165 387.4 146.6 369 124 369 C 101.4 369 83 387.4 83 410 L 82 412 Z"/>
+    <g clip-path="url(#bodyclip)">
+      <path fill="url(#horizon)" d="M 50 334 L 330 334 C 370 336 430 341 470 350 L 480 358 C 330 348 150 348 50 350 Z"/>
+      <path fill="url(#hood)" d="M 332 334 C 372 336 422 341 452 347 C 466 351 474 355 478 359 C 440 350 380 342 336 340 Z"/>
+      <path fill="url(#sky)" d="M 50 372 L 485 380 L 485 392 L 50 386 Z"/>
+      <path fill="url(#ground)" d="M 50 398 L 165 402 L 165 412 L 50 410 Z M 349 404 L 485 402 L 485 412 L 349 414 Z"/>
+      <!-- black plastic lower rear bumper -->
+      <path fill="#0b0c0e" d="M 50 380 C 64 381 76 383 84 386 L 83 410 L 82 413 L 50 413 Z"/>
+      <path fill="none" stroke="#2e3239" stroke-width=".9" d="M 50 381 C 64 382 76 384 84 387"/>
+    </g>
+    <!-- greenhouse: rounded rear quarter glass, thick sloping C-pillar -->
+    <path fill="url(#glass)" stroke="#0a0b0c" stroke-width="1.2" stroke-linejoin="round" d="
+      M 97 331 L 94 318 C 93 304 99 294 112 293 L 280 290 C 288 290 293 293 297 297 L 325 330 C 327 333 325 334 321 334 Z"/>
+    <path fill="none" stroke="url(#chrome)" stroke-width="1.7" stroke-linejoin="round" d="
+      M 97 331 L 94 318 C 93 304 99 294 112 293 L 280 290 C 288 290 293 293 297 297 L 325 330 C 327 333 325 334 321 334 Z"/>
+    <g fill="#0f151b" opacity=".75">
+      <path d="M 172 306 C 172 300 186 300 186 306 L 185 318 L 173 318 Z"/>
+      <path d="M 250 304 C 250 298 265 298 265 304 L 264 317 L 251 317 Z"/>
+      <path d="M 292 322 C 298 316 306 318 309 326 L 306 328 C 303 322 298 321 294 325 Z"/>
+    </g>
+    <path fill="none" stroke="#000000" stroke-width=".9" stroke-linejoin="round" d="M 99 330 L 96.5 318 C 95.7 305.5 101 296 112 295.2 L 280 292.2 C 287 292.2 291.5 295 295 298.6 L 321.5 330 C 322.5 331.6 321.6 332 320 332 Z"/>
+    <g fill="#ffffff" opacity=".14">
+      <path d="M 102 328 L 116 296 L 126 296 L 112 328 Z"/>
+      <path d="M 168 331 L 184 294 L 200 294 L 184 331 Z"/>
+      <path d="M 252 333 L 268 292 L 280 293 L 264 333 Z"/>
+    </g>
+    <path fill="#0d0e11" d="M 141 293 L 159 293 L 152 332 L 139 332 Z"/>
+    <path fill="#0d0e11" d="M 218 291 L 228 291 L 228 333 L 218 333 Z"/>
+    <!-- roof highlight, rails, antenna -->
+    <path fill="url(#roof)" d="M 100 291 C 160 288 230 286 270 287 C 278 287 284 289 288 293 C 240 290 160 291 102 294 Z"/>
+    <path fill="url(#chrome)" d="M 104 287 C 105 282 112 280 120 280 L 278 279 C 284 279 288 282 286 285 Z"/>
+    <path fill="#202328" d="M 112 286 L 119 286 L 118 289 L 112 289 Z M 196 285 L 202 285 L 202 288 L 196 288 Z M 276 284 L 282 284 L 282 287 L 276 287 Z"/>
+    <path fill="none" stroke="#111215" stroke-width="1.2" stroke-linecap="round" d="M 128 280 L 123 268"/>
+    <!-- rear spoiler lip -->
+    <path fill="#16181c" stroke="#050506" stroke-width="1" d="M 72 309 C 78 300 88 294 100 291 L 99 296 C 89 298 81 303 76 311 Z"/>
+    <!-- belt moulding and shoulder -->
+    <path fill="none" stroke="#3a3f46" stroke-width="1.2" d="M 96 333 L 322 335"/>
+    <path fill="none" stroke="#050506" stroke-width="1.3" d="M 58 352 C 150 349 330 350 476 360"/>
+    <!-- panel gaps -->
+    <g fill="none" stroke-linecap="round">
+      <path stroke="#040405" stroke-width="1.4" d="M 150 334 L 146 352 C 144 362 146 372 156 380"/>
+      <path stroke="#040405" stroke-width="1.4" d="M 223 334 L 224 416"/>
+      <path stroke="#040405" stroke-width="1.4" d="M 330 335 L 334 384 C 335 392 338 396 346 398"/>
+      <path stroke="#040405" stroke-width="1.2" d="M 331 335 C 372 338 425 343 470 352"/>
+      <path stroke="#69717b" stroke-width=".7" opacity=".55" d="M 152 336 L 148 352 M 225 336 L 226 414 M 332 337 L 336 384"/>
+    </g>
+    <!-- fuel flap and door handles -->
+    <rect x="109" y="335" width="21" height="11" rx="3.5" fill="none" stroke="#050506" stroke-width="1.2"/>
+    <rect x="143" y="342" width="17" height="7" rx="3.5" fill="#050506"/>
+    <rect x="141" y="343" width="21" height="4.6" rx="2.3" fill="url(#handle)" stroke="#050506" stroke-width=".7"/>
+    <rect x="228" y="345" width="17" height="7" rx="3.5" fill="#050506"/>
+    <rect x="226" y="346" width="21" height="4.6" rx="2.3" fill="url(#handle)" stroke="#050506" stroke-width=".7"/>
+    <path fill="none" stroke="#050506" stroke-width="1.6" stroke-linecap="round" d="M 318 331 L 344 333 M 330 332 L 336 336"/>
+    <g clip-path="url(#bodyclip)">
+      <path fill="#000000" opacity=".22" d="M 56 378 C 160 375 330 376 484 384 L 484 394 C 330 386 160 385 56 388 Z"/>
+      <path fill="none" stroke="#5d646e" stroke-width=".8" opacity=".5" d="M 168 408 L 346 409"/>
+    </g>
+    <!-- chrome side moulding -->
+    <path fill="url(#chrome)" d="M 168 396 L 346 397 C 349 397 350 399 348 401 L 168 400 C 166 400 166 396 168 396 Z"/>
+    <!-- mirror on the door below the A-pillar -->
+    <path fill="#0c0d10" d="M 302 330 L 310 330 L 310 337 L 302 337 Z"/>
+    <path fill="url(#paint)" stroke="#050506" stroke-width="1.1" d="M 291 320 C 295 314 309 313 312 317 C 315 321 315 328 312 332 C 306 335 295 335 292 332 C 289 328 289 324 291 320 Z"/>
+    <path fill="#c7ccd2" d="M 293 330 C 299 331 307 331 312 329 L 312 332 C 306 334 298 334 293 333 Z"/>
+    <path fill="#ffffff" opacity=".2" d="M 294 319 C 299 316 307 316 310 318 L 310 320 L 294 322 Z"/>
+    <!-- tail light, rear marker, exhaust -->
+    <path fill="url(#tail)" stroke="#050506" stroke-width="1.1" d="M 62 332 L 72 333 C 74 334 75 336 74 339 L 72 352 C 72 354 70 355 68 355 L 60 354 C 58 354 58 352 58 350 L 59 335 C 59 333 60 332 62 332 Z"/>
+    <path fill="#ffb8b8" opacity=".55" d="M 62 335 L 71 336 L 71 339 L 61 338 Z"/>
+    <path fill="#eef1f4" d="M 59 348 L 72 349 L 72 353 L 59 352 Z"/>
+    <rect x="52" y="386" width="9" height="3.5" rx="1.75" fill="#a3121a"/>
+    <ellipse cx="72" cy="413" rx="6" ry="2.4" fill="url(#chrome)" stroke="#050506" stroke-width=".8"/>
+    <!-- head light with twin projectors -->
+    <path fill="url(#lamp)" stroke="#050506" stroke-width="1.2" d="M 428 354 C 444 351 462 352 471 356 C 474 359 474 365 470 368 L 432 369 C 428 367 426 360 428 354 Z"/>
+    <circle cx="444" cy="361" r="4.6" fill="url(#lens)" stroke="#59626c" stroke-width=".8"/>
+    <circle cx="458" cy="361" r="4.6" fill="url(#lens)" stroke="#59626c" stroke-width=".8"/>
+    <!-- grille edge, bumper with amber marker and black intakes -->
+    <path fill="#0a0b0d" d="M 472 356 L 479 360 L 481 376 L 474 374 Z"/>
+    <path fill="none" stroke="url(#chrome)" stroke-width="1.3" d="M 474 358 L 480 361 M 474 364 L 480 366 M 474 370 L 481 372"/>
+    <path fill="url(#chrome)" d="M 479 360 C 482 362 483 368 482 373 L 480 372 C 481 368 481 364 479 362 Z"/>
+    <circle cx="470" cy="408" r="3.6" fill="url(#lens)" stroke="#2a2e34" stroke-width=".7"/>
+    <path fill="#0a0b0d" stroke="#2a2e34" stroke-width=".8" d="M 450 384 L 482 385 C 482 391 481 395 479 397 L 452 395 Z"/>
+    <path fill="#e3901f" d="M 440 387 L 448 387 L 448 391 L 440 391 Z"/>
+    <path fill="#0b0c0e" d="M 436 404 L 480 404 C 480 409 479 412 477 414 L 436 414 Z"/>
+    <path fill="none" stroke="#6f7781" stroke-width=".8" opacity=".6" d="M 432 379 C 452 378 468 379 482 380"/>
+  </g>
+  <!-- Rear view: same frame, centred on x = 256, ground at y = 443. Body width 1928 mm = 180 px, track 154 px. -->
+  <g id="rear">
+    <ellipse cx="256" cy="444" rx="112" ry="6" fill="#000000" opacity=".3"/>
+    <rect x="167" y="408" width="25" height="35" rx="6" fill="#141416"/>
+    <rect x="320" y="408" width="25" height="35" rx="6" fill="#141416"/>
+    <path fill="url(#paint)" stroke="#050506" stroke-width="1.1" d="M 166 326 L 152 325 C 148 325 146 329 147 333 L 149 339 C 150 341 152 342 155 341 L 166 339 Z"/>
+    <path fill="url(#paint)" stroke="#050506" stroke-width="1.1" d="M 346 326 L 360 325 C 364 325 366 329 365 333 L 363 339 C 362 341 360 342 357 341 L 346 339 Z"/>
+    <path id="rearbody" fill="url(#paint)" stroke="#050506" stroke-width="1.6" stroke-linejoin="round" d="
+      M 186 288 L 326 288 C 336 288 342 293 344 302 L 346 343 C 349 350 349 362 348 380 L 347 412 C 347 420 343 424 337 424
+      L 175 424 C 169 424 165 420 165 412 L 164 380 C 163 362 163 350 166 343 L 168 302 C 170 293 176 288 186 288 Z"/>
+    <g clip-path="url(#rearclip)">
+    <path fill="url(#sideL)" d="M 163 300 L 196 300 L 196 424 L 163 424 Z"/>
+    <path fill="url(#sideR)" d="M 316 300 L 349 300 L 349 424 L 316 424 Z"/>
+    </g>
+    <path fill="url(#roof)" opacity=".7" d="M 186 289 L 326 289 C 333 289 338 292 340 296 L 172 296 C 174 292 179 289 186 289 Z"/>
+    <!-- roof rail ends and spoiler with third brake light -->
+    <path fill="url(#chrome)" d="M 176 288 C 176 282 180 279 186 279 L 190 279 L 190 288 Z M 336 288 C 336 282 332 279 326 279 L 322 279 L 322 288 Z"/>
+    <path fill="#15171b" stroke="#050506" stroke-width="1" d="M 178 293 L 334 293 L 337 300 L 175 300 Z"/>
+    <rect x="232" y="294.5" width="48" height="2.6" rx="1.3" fill="#d1212b"/>
+    <!-- rear window and wiper -->
+    <path fill="url(#glassV)" stroke="#050506" stroke-width="1.1" d="M 184 301 L 328 301 C 332 301 334 303 334 307 L 336 340 C 336 343 334 345 331 345 L 181 345 C 178 345 176 343 176 340 L 178 307 C 178 303 180 301 184 301 Z"/>
+    <path fill="#ffffff" opacity=".1" d="M 200 344 L 228 302 L 246 302 L 218 344 Z"/>
+    <path fill="none" stroke="#050506" stroke-width="1.7" stroke-linecap="round" d="M 256 342 L 226 336"/>
+    <circle cx="256" cy="342" r="2" fill="#1d1f23"/>
+    <!-- tailgate shut line -->
+    <path fill="none" stroke="#040405" stroke-width="1.2" d="M 204 349 L 205 393 C 205 397 208 399 212 399 L 300 399 C 304 399 307 397 307 393 L 308 349"/>
+    <path fill="none" stroke="#050506" stroke-width="1.2" d="M 170 348 L 342 348"/>
+    <!-- tail lights -->
+    <path fill="url(#tail)" stroke="#050506" stroke-width="1.1" d="M 166 350 L 200 352 C 203 352 204 354 203 357 L 200 370 C 199 372 197 373 195 373 L 168 372 C 166 372 164 370 164 368 Z"/>
+    <path fill="url(#tail)" stroke="#050506" stroke-width="1.1" d="M 346 350 L 312 352 C 309 352 308 354 309 357 L 312 370 C 313 372 315 373 317 373 L 344 372 C 346 372 348 370 348 368 Z"/>
+    <g fill="none" stroke="#ff6b6b" stroke-width="1.2" opacity=".75">
+      <circle cx="180" cy="359" r="5.2"/><circle cx="193" cy="360" r="4.2"/>
+      <circle cx="332" cy="359" r="5.2"/><circle cx="319" cy="360" r="4.2"/>
+    </g>
+    <path fill="#eceff2" d="M 167 366 L 200 367 L 199 371 L 168 370 Z M 345 366 L 312 367 L 313 371 L 344 370 Z"/>
+    <!-- VW roundel, model badge, plate, trim -->
+    <circle cx="256" cy="360" r="9" fill="url(#chrome)" stroke="#2a2e34" stroke-width=".8"/>
+    <circle cx="256" cy="360" r="7" fill="#15171b"/>
+    <path fill="none" stroke="url(#chrome)" stroke-width="1.5" stroke-linejoin="round" d="M 251 353.6 L 256 362.6 L 261 353.6 M 249.4 357.4 L 252.8 366.4 L 256 360.6 L 259.2 366.4 L 262.6 357.4"/>
+    <text x="208" y="386" font-family="Arial, sans-serif" font-size="5.4" font-weight="bold" letter-spacing=".6" fill="#c9ced5">TOUAREG</text>
+    <rect x="240" y="372" width="44" height="20" rx="2" fill="#0d0e10"/>
+    <rect x="242.5" y="374.5" width="39" height="15" rx="1.5" fill="#e8ebee" stroke="#9aa1aa" stroke-width=".6"/>
+    <rect x="210" y="394" width="92" height="2.6" rx="1.3" fill="url(#chrome)"/>
+    <!-- bumper: black lower part, reflectors, oval exhausts -->
+    <path fill="#0b0c0e" stroke="#050506" stroke-width="1" d="M 165 404 L 347 404 L 347 412 C 347 420 343 424 337 424 L 175 424 C 169 424 165 420 165 412 Z"/>
+    <rect x="171" y="398" width="18" height="3" rx="1.5" fill="#a3121a"/>
+    <rect x="323" y="398" width="18" height="3" rx="1.5" fill="#a3121a"/>
+    <ellipse cx="198" cy="418" rx="9" ry="3.8" fill="url(#chrome)" stroke="#050506" stroke-width=".8"/>
+    <ellipse cx="198" cy="418" rx="6.5" ry="2.2" fill="#0a0a0b"/>
+    <ellipse cx="314" cy="418" rx="9" ry="3.8" fill="url(#chrome)" stroke="#050506" stroke-width=".8"/>
+    <ellipse cx="314" cy="418" rx="6.5" ry="2.2" fill="#0a0a0b"/>
+  </g>
+  <!-- Front view: same frame and scale as the rear view. -->
+  <g id="front">
+    <ellipse cx="256" cy="444" rx="112" ry="6" fill="#000000" opacity=".3"/>
+    <rect x="167" y="408" width="25" height="35" rx="6" fill="#141416"/>
+    <rect x="320" y="408" width="25" height="35" rx="6" fill="#141416"/>
+    <path fill="url(#paint)" stroke="#050506" stroke-width="1.1" d="M 168 326 L 150 323 C 145 323 143 327 144 332 L 146 339 C 147 342 150 343 153 342 L 168 339 Z"/>
+    <path fill="url(#paint)" stroke="#050506" stroke-width="1.1" d="M 344 326 L 362 323 C 367 323 369 327 368 332 L 366 339 C 365 342 362 343 359 342 L 344 339 Z"/>
+    <path fill="#c7ccd2" d="M 146 337 L 166 336 L 166 338 L 147 340 Z M 366 337 L 346 336 L 346 338 L 365 340 Z"/>
+    <path id="frontbody" fill="url(#paint)" stroke="#050506" stroke-width="1.6" stroke-linejoin="round" d="
+      M 190 288 L 322 288 C 330 288 335 292 337 299 L 344 336 C 348 344 349 360 348 380 L 347 412 C 347 420 343 424 337 424
+      L 175 424 C 169 424 165 420 165 412 L 164 380 C 163 360 164 344 168 336 L 175 299 C 177 292 182 288 190 288 Z"/>
+    <g clip-path="url(#frontclip)">
+    <path fill="url(#sideL)" d="M 163 300 L 196 300 L 196 424 L 163 424 Z"/>
+    <path fill="url(#sideR)" d="M 316 300 L 349 300 L 349 424 L 316 424 Z"/>
+    </g>
+    <path fill="url(#chrome)" d="M 180 288 C 180 282 184 279 190 279 L 194 279 L 194 288 Z M 332 288 C 332 282 328 279 322 279 L 318 279 L 318 288 Z"/>
+    <!-- windscreen, wipers -->
+    <path fill="url(#glassV)" stroke="#050506" stroke-width="1.1" d="M 192 295 L 320 295 C 325 295 328 298 329 302 L 338 334 C 339 337 337 339 334 339 L 178 339 C 175 339 173 337 174 334 L 183 302 C 184 298 187 295 192 295 Z"/>
+    <g fill="#0f151b" opacity=".7">
+      <path d="M 216 320 C 216 312 234 312 234 320 L 233 338 L 217 338 Z"/>
+      <path d="M 278 320 C 278 312 296 312 296 320 L 295 338 L 279 338 Z"/>
+      <path d="M 268 332 C 274 324 290 324 296 332 L 293 334 C 288 328 276 328 271 334 Z"/>
+    </g>
+    <path fill="#ffffff" opacity=".12" d="M 196 338 L 226 296 L 248 296 L 218 338 Z"/>
+    <path fill="none" stroke="#050506" stroke-width="1.6" stroke-linecap="round" d="M 206 338 L 244 332 M 262 338 L 300 332"/>
+    <!-- hood and its shut line -->
+    <path fill="url(#roof)" opacity=".6" d="M 176 340 L 336 340 C 340 343 342 346 343 349 L 169 349 C 170 346 172 343 176 340 Z"/>
+    <path fill="none" stroke="#040405" stroke-width="1.1" d="M 170 349 C 220 347 292 347 342 349"/>
+    <!-- grille with chrome bars and roundel -->
+    <path fill="#0b0c0e" stroke="url(#chrome)" stroke-width="2" stroke-linejoin="round" d="M 222 351 L 290 351 C 294 351 296 353 296 357 L 293 378 C 292 381 290 382 287 382 L 225 382 C 222 382 220 381 219 378 L 216 357 C 216 353 218 351 222 351 Z"/>
+    <path fill="none" stroke="url(#chrome)" stroke-width="1.6" d="M 219 358 L 293 358 M 220 364.5 L 292 364.5 M 220.5 371 L 291.5 371 M 221 377 L 291 377"/>
+    <circle cx="256" cy="366" r="10.5" fill="url(#chrome)" stroke="#2a2e34" stroke-width=".8"/>
+    <circle cx="256" cy="366" r="8.2" fill="#15171b"/>
+    <path fill="none" stroke="url(#chrome)" stroke-width="1.7" stroke-linejoin="round" d="M 250.4 358.8 L 256 369 L 261.6 358.8 M 248.6 363 L 252.4 373.2 L 256 366.6 L 259.6 373.2 L 263.4 363"/>
+    <!-- head lights with twin round projectors -->
+    <path fill="url(#lamp)" stroke="#050506" stroke-width="1.1" d="M 168 352 L 210 354 C 213 354 214 356 213 359 L 210 372 C 209 374 207 375 204 375 L 172 373 C 168 372 166 369 166 366 L 166 356 C 166 353 167 352 168 352 Z"/>
+    <path fill="url(#lamp)" stroke="#050506" stroke-width="1.1" d="M 344 352 L 302 354 C 299 354 298 356 299 359 L 302 372 C 303 374 305 375 308 375 L 340 373 C 344 372 346 369 346 366 L 346 356 C 346 353 345 352 344 352 Z"/>
+    <g stroke="#59626c" stroke-width=".8">
+      <circle cx="180" cy="363" r="6.2" fill="url(#lens)"/><circle cx="198" cy="364" r="6.2" fill="url(#lens)"/>
+      <circle cx="332" cy="363" r="6.2" fill="url(#lens)"/><circle cx="314" cy="364" r="6.2" fill="url(#lens)"/>
+    </g>
+    <!-- bumper: intakes with chrome bars, amber markers, fog lamps, plate, lower lip -->
+    <path fill="none" stroke="#040405" stroke-width="1" d="M 166 382 C 220 380 292 380 346 382"/>
+    <path fill="#0a0b0d" stroke="#2a2e34" stroke-width=".8" d="M 176 387 L 212 387 L 212 399 L 178 399 Z M 336 387 L 300 387 L 300 399 L 334 399 Z M 222 387 L 290 387 L 288 400 L 224 400 Z"/>
+    <path fill="none" stroke="url(#chrome)" stroke-width="1.4" d="M 177 393 L 212 393 M 335 393 L 300 393 M 223 393.5 L 289 393.5"/>
+    <rect x="167" y="386" width="6" height="5" rx="1" fill="#e3901f"/>
+    <rect x="339" y="386" width="6" height="5" rx="1" fill="#e3901f"/>
+    <path fill="#0b0c0e" stroke="#050506" stroke-width="1" d="M 165 404 L 347 404 L 347 412 C 347 420 343 424 337 424 L 175 424 C 169 424 165 420 165 412 Z"/>
+    <circle cx="186" cy="410" r="4.4" fill="url(#lens)" stroke="#2a2e34" stroke-width=".7"/>
+    <circle cx="326" cy="410" r="4.4" fill="url(#lens)" stroke="#2a2e34" stroke-width=".7"/>
+    <rect x="234" y="405" width="44" height="13" rx="1.5" fill="#e8ebee" stroke="#9aa1aa" stroke-width=".6"/>
+  </g>
+</svg>
