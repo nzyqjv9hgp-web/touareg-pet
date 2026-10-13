@@ -6,39 +6,51 @@ namespace Touareg.Windows;
 
 internal sealed class Renderer(Sprites sprites) : IDisposable
 {
-    Bitmap? car, effects;
+    // Frames scaled once with high quality for the current car size; each frame then only rotates them (bilinear).
+    sealed class Scaled(double scale) : IDisposable
+    {
+        public readonly double Scale = scale;
+        public readonly Dictionary<string, Bitmap[]> Frames = [];
+        public void Dispose() { foreach (var image in Frames.Values.SelectMany(f => f)) image.Dispose(); }
+    }
+    readonly List<Scaled> cache = [];
+    readonly Bitmap[] puffs = Puffs();
+    bool effectsClear;
+
     internal void Draw(World world, LayerWindow pet, LayerWindow effectWindow)
     {
-        var pose = world.Pose; double unit = world.Scale / (194.0 / 440);
+        var pose = world.Pose; double unit = world.Scale / (194.0 / 440), scale = world.Scale;
         int w = (int)Math.Ceiling(590 * unit), h = (int)Math.Ceiling(420 * unit);
-        if (car?.Width != w || car.Height != h)
-        {
-            car?.Dispose(); effects?.Dispose();
-            car = new(w, h, PixelFormat.Format32bppPArgb); effects = new(w, h, PixelFormat.Format32bppPArgb);
-        }
         int left = (int)Math.Floor(pose.X - w / 2.0), top = (int)Math.Floor(pose.Y - h * .70);
-        using (var g = Graphics.FromImage(car))
+        var frames = For(scale); float n = (float)(512 * scale);
+        using (var g = Graphics.FromImage(pet.Canvas(w, h)))
         {
             Setup(g); g.Clear(Color.Transparent);
             using var transform = new Matrix();
             transform.Rotate((float)pose.Angle, MatrixOrder.Append);
-            transform.Scale((float)(world.Scale * pose.Direction * pose.Flip), (float)world.Scale, MatrixOrder.Append);
+            transform.Scale((float)(pose.Direction * pose.Flip), 1, MatrixOrder.Append);
             transform.Translate((float)(pose.X - left), (float)(pose.Y - top), MatrixOrder.Append);
             g.Transform = transform;
-            g.DrawImage(sprites.Frames[pose.Sequence][pose.Frame], -256, -410, 512, 512);
+            g.DrawImage(frames.Frames[pose.Sequence][pose.Frame], new RectangleF((float)(-256 * scale), (float)(-410 * scale), n, n), new RectangleF(0, 0, n, n), GraphicsUnit.Pixel);
             if (pose.Sequence == "drive" && world.Phase != Motion.Turn)
             {
+                float r = (float)(31 * scale);
                 for (int i = 0; i < 2; i++)
                 {
                     var at = sprites.Wheels[pose.Frame][i]; var src = sprites.Wheels[0][i];
-                    var save = g.Save(); g.TranslateTransform(at.X - 256, at.Y - 410); g.RotateTransform((float)(world.WheelSpin * 180 / Math.PI));
-                    using var clip = new GraphicsPath(); clip.AddEllipse(-31, -31, 62, 62); g.SetClip(clip);
-                    g.DrawImage(sprites.Frames["drive"][0], new RectangleF(-31, -31, 62, 62), new RectangleF(src.X - 31, src.Y - 31, 62, 62), GraphicsUnit.Pixel);
+                    var save = g.Save(); g.TranslateTransform((float)((at.X - 256) * scale), (float)((at.Y - 410) * scale)); g.RotateTransform((float)(world.WheelSpin * 180 / Math.PI));
+                    using var clip = new GraphicsPath(); clip.AddEllipse(-r, -r, 2 * r, 2 * r); g.SetClip(clip);
+                    g.DrawImage(frames.Frames["drive"][0], new RectangleF(-r, -r, 2 * r, 2 * r), new RectangleF((float)(src.X * scale) - r, (float)(src.Y * scale) - r, 2 * r, 2 * r), GraphicsUnit.Pixel);
                     g.Restore(save);
                 }
             }
         }
-        using (var g = Graphics.FromImage(effects!))
+        pet.Present(left, top);
+
+        // Nothing to show and the layer is already empty: skip the second window entirely.
+        bool empty = world.CurrentRamp is null && world.Particles.Count == 0 && world.Streaks.Count == 0;
+        if (empty && effectsClear) return;
+        using (var g = Graphics.FromImage(effectWindow.Canvas(w, h)))
         {
             Setup(g); g.Clear(Color.Transparent); g.TranslateTransform(-left, -top);
             if (world.CurrentRamp is { } ramp)
@@ -56,14 +68,45 @@ internal sealed class Renderer(Sprites sprites) : IDisposable
             }
             foreach (var p in world.Particles)
             {
-                if (p.Radius <= 0) continue;
-                using var path = new GraphicsPath(); path.AddEllipse((float)(p.X - p.Radius), (float)(p.Y - p.Radius), (float)(2 * p.Radius), (float)(2 * p.Radius));
-                using var brush = new PathGradientBrush(path) { CenterColor = Color.FromArgb((int)(175 * (1 - p.Age / p.Life)), 224, 229, 237), SurroundColors = [Color.Transparent] };
-                g.FillPath(brush, path);
+                int level = (int)Math.Round((puffs.Length - 1) * (1 - p.Age / p.Life));
+                if (p.Radius <= 0 || level <= 0) continue;
+                g.DrawImage(puffs[level], (float)(p.X - p.Radius), (float)(p.Y - p.Radius), (float)(2 * p.Radius), (float)(2 * p.Radius));
             }
         }
-        effectWindow.Present(effects!, left, top); pet.Present(car, left, top);
+        effectWindow.Present(left, top); effectsClear = empty;
     }
-    static void Setup(Graphics g) { g.CompositingMode = CompositingMode.SourceOver; g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.PixelOffsetMode = PixelOffsetMode.HighQuality; }
-    public void Dispose() { car?.Dispose(); effects?.Dispose(); }
+
+    Scaled For(double scale)
+    {
+        var hit = cache.FirstOrDefault(c => Math.Abs(c.Scale - scale) < 1e-6);
+        if (hit is not null) { if (cache[0] != hit) { cache.Remove(hit); cache.Insert(0, hit); } return hit; }
+        var made = new Scaled(scale); int size = (int)Math.Ceiling(512 * scale);
+        foreach (var (name, source) in sprites.Frames)
+            made.Frames[name] = source.Select(frame =>
+            {
+                var image = new Bitmap(size, size, PixelFormat.Format32bppPArgb);
+                using var g = Graphics.FromImage(image);
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.PixelOffsetMode = PixelOffsetMode.HighQuality; g.CompositingQuality = CompositingQuality.HighQuality;
+                g.DrawImage(frame, 0, 0, (float)(512 * scale), (float)(512 * scale));
+                return image;
+            }).ToArray();
+        cache.Insert(0, made);
+        // A few sizes stay ready: monitors with different DPI and recent settings.
+        while (cache.Count > 3) { cache[^1].Dispose(); cache.RemoveAt(cache.Count - 1); }
+        return made;
+    }
+
+    // Soft smoke puffs at 16 opacity levels, drawn as images instead of building a gradient per particle.
+    static Bitmap[] Puffs() => Enumerable.Range(0, 16).Select(level =>
+    {
+        var image = new Bitmap(64, 64, PixelFormat.Format32bppPArgb);
+        using var g = Graphics.FromImage(image); g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var path = new GraphicsPath(); path.AddEllipse(0, 0, 64, 64);
+        using var brush = new PathGradientBrush(path) { CenterColor = Color.FromArgb((int)(175 * level / 15.0), 224, 229, 237), SurroundColors = [Color.Transparent] };
+        g.FillPath(brush, path);
+        return image;
+    }).ToArray();
+
+    static void Setup(Graphics g) { g.CompositingMode = CompositingMode.SourceOver; g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.Bilinear; g.PixelOffsetMode = PixelOffsetMode.Half; }
+    public void Dispose() { foreach (var c in cache) c.Dispose(); foreach (var p in puffs) p.Dispose(); }
 }

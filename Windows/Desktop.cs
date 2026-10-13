@@ -34,8 +34,8 @@ internal static class Desktop
             foreach (var (l, rr) in segments)
             {
                 var screen = Screen.FromPoint(new((int)((l + rr) / 2), r.Top));
-                // Leave enough room above the edge for the character's head.
-                if (rr - l >= minimum && r.Top >= screen.WorkingArea.Top + 145 * dpi / 96
+                // Leave enough room above the edge for the character's head at the chosen size.
+                if (rr - l >= minimum && r.Top >= screen.WorkingArea.Top + 335 * carWidth / 440 * dpi / 96
                     && r.Top < screen.WorkingArea.Bottom - 20)
                     result.Add(new(hwnd.ToInt64(), Math.Max(l, screen.WorkingArea.Left), Math.Min(rr, screen.WorkingArea.Right), r.Top, dpi));
             }

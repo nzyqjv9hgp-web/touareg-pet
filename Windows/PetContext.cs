@@ -13,18 +13,19 @@ internal sealed class PetContext : ApplicationContext
     readonly Updater updater = new();
     readonly NotifyIcon tray;
     readonly Renderer renderer;
-    readonly System.Windows.Forms.Timer timer = new() { Interval = 16 };
     readonly System.Windows.Forms.Timer updateTimer = new() { Interval = 30000 };
     readonly Stopwatch clock = Stopwatch.StartNew();
     readonly ToolStripMenuItem pause = new("Пауза"), updateItem = new("Проверить обновления"), restart = new("Перезапустить для обновления") { Visible = false };
+    readonly DesktopWatcher watcher;
+    readonly FrameClock frames;
     SettingsWindow? preferences;
-    double last, scan;
-    bool hidden, disposed;
+    double last, topmost;
+    bool hidden, fullscreen, disposed;
     Native.Point press;
 
     internal PetContext(bool welcome)
     {
-        renderer = new(sprites);
+        renderer = new(sprites); watcher = new(settings.Size);
         var menu = new ContextMenuStrip();
         pause.Click += (_, _) => SetPause(!world.Paused);
         menu.Items.Add(pause);
@@ -47,19 +48,23 @@ internal sealed class PetContext : ApplicationContext
         updater.Changed += () => { restart.Visible = updater.Ready; preferences?.UpdateStatus(updater.Status); };
         Apply(); Rescan();
         effects.Show(); pet.Show(); renderer.Draw(world, pet, effects);
-        timer.Tick += (_, _) => Tick(); timer.Start();
+        frames = new(pet, Tick);
         updateTimer.Tick += async (_, _) =>
         {
             updateTimer.Interval = 6 * 60 * 60 * 1000;
             if (settings.AutoUpdate) await updater.Check();
         };
         updateTimer.Start();
-        if (welcome) { Preferences(); Balloon("Удерживай ЛКМ на машине — бернаут. Отпусти — быстрый старт."); }
+        if (welcome) { Preferences(); Balloon("Удерживай ЛКМ на машине — бернаут. Потяни мышью — перенесёшь и бросишь."); }
         else Balloon("Touareg на рабочем столе. Меню — правой кнопкой по машине или значку рядом с часами.");
     }
 
-    void Apply() { world.CarWidth = settings.Size; world.Speed = settings.Speed / 100.0; }
-    void Rescan() { world.SetScreens(Desktop.Screens()); world.SetSurfaces(Desktop.Scan(world.CarWidth)); }
+    void Apply() { world.CarWidth = settings.Size; world.Speed = settings.Speed / 100.0; watcher.CarWidth = settings.Size; }
+    void Rescan() => Use(DesktopWatcher.Scan(settings.Size));
+    void Use(DesktopWatcher.Snapshot snapshot)
+    {
+        world.SetScreens(snapshot.Screens); world.SetSurfaces(snapshot.Surfaces); fullscreen = snapshot.Fullscreen;
+    }
     void SetPause(bool value)
     {
         world.Hold(false); pet.Capture = false; world.Paused = value; pause.Checked = value;
@@ -67,19 +72,16 @@ internal sealed class PetContext : ApplicationContext
     }
     void Tick()
     {
-        double now = clock.Elapsed.TotalSeconds, dt = Math.Clamp(now - last, 0, .10); last = now; scan += dt;
-        if (scan >= .35)
+        double now = clock.Elapsed.TotalSeconds, dt = Math.Clamp(now - last, 0, .10); last = now; topmost += dt;
+        if (watcher.Take() is { } snapshot) Use(snapshot);
+        bool next = settings.HideFullscreen && fullscreen;
+        if (next != hidden)
         {
-            scan = 0; Apply(); Rescan();
-            bool next = settings.HideFullscreen && Desktop.Fullscreen();
-            if (next != hidden)
-            {
-                hidden = next;
-                if (hidden) { world.Hold(false); pet.Capture = false; pet.Hide(); effects.Hide(); }
-                else { effects.Show(); pet.Show(); }
-            }
-            Native.SetWindowPos(pet.Handle, (IntPtr)(-1), 0, 0, 0, 0, 0x13);
+            hidden = next;
+            if (hidden) { world.Hold(false); pet.Capture = false; pet.Hide(); effects.Hide(); }
+            else { effects.Show(); pet.Show(); }
         }
+        if (topmost >= .5) { topmost = 0; Native.SetWindowPos(pet.Handle, (IntPtr)(-1), 0, 0, 0, 0, 0x13); }
         if (world.Held && (Native.GetAsyncKeyState(1) & 0x8000) == 0) { world.Hold(false); pet.Capture = false; }
         // Holding still is a burnout; moving the mouse while holding picks the car up.
         if (world.Held && Native.GetCursorPos(out var cursor))
@@ -103,9 +105,9 @@ internal sealed class PetContext : ApplicationContext
     protected override void ExitThreadCore()
     {
         if (disposed) return; disposed = true;
-        timer.Stop(); updateTimer.Stop(); settings.Save(); world.Hold(false);
+        frames.Dispose(); watcher.Dispose(); updateTimer.Stop(); settings.Save(); world.Hold(false);
         tray.Visible = false; tray.Dispose(); audio.Dispose(); renderer.Dispose(); sprites.Dispose();
-        preferences?.Dispose(); pet.Dispose(); effects.Dispose(); timer.Dispose(); updateTimer.Dispose();
+        preferences?.Dispose(); pet.Dispose(); effects.Dispose(); updateTimer.Dispose();
         base.ExitThreadCore();
     }
 }

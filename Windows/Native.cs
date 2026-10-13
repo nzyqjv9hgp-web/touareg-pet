@@ -38,4 +38,11 @@ internal static class Native
     [DllImport("user32.dll", SetLastError = true)] internal static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr dstDc, ref Point dst,
         ref Size size, IntPtr srcDc, ref Point src, uint key, ref Blend blend, uint flags);
     [DllImport("user32.dll")] internal static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);
+    internal delegate void WinEventProc(IntPtr hook, uint e, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+    [DllImport("user32.dll")] internal static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
+    [DllImport("user32.dll")] internal static extern bool UnhookWinEvent(IntPtr hook);
+    [DllImport("dwmapi.dll")] internal static extern int DwmFlush();
+    [DllImport("winmm.dll")] internal static extern uint timeBeginPeriod(uint period);
+    [DllImport("winmm.dll")] internal static extern uint timeEndPeriod(uint period);
+    [DllImport("gdi32.dll")] internal static extern bool GdiFlush();
 }

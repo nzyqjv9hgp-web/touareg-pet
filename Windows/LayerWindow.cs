@@ -9,7 +9,7 @@ internal sealed class LayerWindow : Form
     readonly bool clickThrough;
     IntPtr dc, dib, oldBitmap, pixels;
     Size dibSize;
-    byte[] bytes = [];
+    Bitmap? canvas;
     internal LayerWindow(bool effects)
     {
         clickThrough = effects;
@@ -30,31 +30,32 @@ internal sealed class LayerWindow : Form
     protected override void OnPaintBackground(PaintEventArgs e) { }
     protected override void OnPaint(PaintEventArgs e) { }
 
-    internal void Present(Bitmap bitmap, int x, int y)
+    // A drawing surface that lives directly in the window's DIB: no per-frame copies.
+    internal Bitmap Canvas(int width, int height)
     {
-        if (dibSize != bitmap.Size)
+        if (canvas is null || dibSize.Width != width || dibSize.Height != height)
         {
             FreeDib(); dc = Native.CreateCompatibleDC(IntPtr.Zero);
-            var info = new Native.BitmapInfo { Size = 40, Width = bitmap.Width, Height = -bitmap.Height, Planes = 1, Bits = 32 };
+            var info = new Native.BitmapInfo { Size = 40, Width = width, Height = -height, Planes = 1, Bits = 32 };
             dib = Native.CreateDIBSection(dc, ref info, 0, out pixels, IntPtr.Zero, 0);
             if (dib == IntPtr.Zero) throw new InvalidOperationException("Не удалось создать прозрачное окно");
-            oldBitmap = Native.SelectObject(dc, dib); dibSize = bitmap.Size; bytes = new byte[bitmap.Width * bitmap.Height * 4];
+            oldBitmap = Native.SelectObject(dc, dib); dibSize = new(width, height);
+            canvas = new Bitmap(width, height, width * 4, PixelFormat.Format32bppPArgb, pixels);
         }
-        var locked = bitmap.LockBits(new(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
-        try
-        {
-            for (int row = 0; row < bitmap.Height; row++)
-                Marshal.Copy(locked.Scan0 + row * locked.Stride, bytes, row * bitmap.Width * 4, bitmap.Width * 4);
-            Marshal.Copy(bytes, 0, pixels, bytes.Length);
-        }
-        finally { bitmap.UnlockBits(locked); }
-        var dest = new Native.Point(x, y); var src = new Native.Point(0, 0); var size = new Native.Size(bitmap.Width, bitmap.Height);
+        return canvas;
+    }
+
+    internal void Present(int x, int y)
+    {
+        Native.GdiFlush();
+        var dest = new Native.Point(x, y); var src = new Native.Point(0, 0); var size = new Native.Size(dibSize.Width, dibSize.Height);
         var blend = new Native.Blend { Alpha = 255, Format = 1 };
         if (!Native.UpdateLayeredWindow(Handle, IntPtr.Zero, ref dest, ref size, dc, ref src, 0, ref blend, 2))
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     }
     void FreeDib()
     {
+        canvas?.Dispose(); canvas = null; dibSize = Size.Empty;
         if (dc != IntPtr.Zero && oldBitmap != IntPtr.Zero) Native.SelectObject(dc, oldBitmap);
         if (dib != IntPtr.Zero) Native.DeleteObject(dib);
         if (dc != IntPtr.Zero) Native.DeleteDC(dc);

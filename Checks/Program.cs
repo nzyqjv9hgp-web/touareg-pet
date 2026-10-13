@@ -113,6 +113,32 @@ for (int i = 0; i < 120 * 90 && !(climbed && fellOff); i++)
 Assert(climbed && climb.Jumps >= 1, "Takes a ramp up from the taskbar onto a window");
 Assert(fellOff, "Sometimes drives off the end of a window and drops down");
 
+var click = new World(); click.SetSurfaces(windows); Tick(click, .5);
+click.Hold(true); Tick(click, .05); int puffsBefore = click.Particles.Count; click.Hold(false);
+Assert(click.Phase == Motion.Drive && click.EngineArmed && click.Particles.Count > puffsBefore, "A quick click launches without a burnout first");
+var still = new World(); still.SetSurfaces(windows); Tick(still, .5); still.Hold(true); Tick(still, .1);
+var frameA = still.Pose.Frame; Tick(still, .03);
+Assert(still.Phase == Motion.Drive && still.Velocity == 0 && !still.EngineArmed && still.Pose.Frame == frameA, "Pressing brakes under the cursor; a stopped car does not animate");
+Tick(still, .1); Assert(still.Phase == Motion.Burnout, "Holding still for a moment starts the burnout");
+
+var unfold = new World(); unfold.SetSurfaces(windows);
+var heights = new List<double>();
+for (int i = 0; i < 60; i++) { unfold.Step(1.0 / 120); heights.Add(unfold.CurrentRamp?.Height ?? 0); }
+Assert(heights[0] < heights[20] && heights[20] < heights[^1] && Math.Abs(heights[^1] - 30) < .001, "Ramp unfolds instead of popping in");
+for (int i = 0; i < 600 && unfold.Phase != Motion.Jump; i++) unfold.Step(1.0 / 120);
+double takeoff = unfold.CurrentRamp?.Height ?? 0; Tick(unfold, .4);
+Assert(takeoff > 0 && unfold.CurrentRamp is null, "Ramp folds away after take-off");
+for (int i = 0; i < 600 && unfold.Phase != Motion.Land; i++) unfold.Step(1.0 / 120);
+Assert(unfold.Velocity >= 165 - .001 && unfold.Impacts.Any(i => !i.Metal), "Lands at cruising speed with a thud");
+
+var turn = new World(); turn.SetSurfaces([new(1, 0, 900, 400), new(-1, 0, 1600, 900, Floor: true)]);
+for (int i = 0; i < 120 * 10 && turn.Phase != Motion.Turn; i++) turn.Step(1.0 / 120);
+double squashed = 0, lowest = 0; int facing = turn.Direction;
+while (turn.Phase == Motion.Turn) { turn.Step(1.0 / 120); var p = turn.Pose; if (Math.Abs(p.Flip) < .5) squashed += 1.0 / 120; lowest = Math.Min(lowest, p.Y - (400 - 47 * turn.Scale)); }
+Assert(turn.Direction == -facing && squashed <= .1 && lowest < -5, "Turns with a quick hop instead of a slow paper flip");
+
+Assert(bump.Impacts.Any(i => i.Metal) && wall.Impacts.Any(i => i.Metal), "Wall crashes queue a crash sound");
+
 string root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../Assets"));
 using var b = File.OpenRead(Path.Combine(root, "audio/v8-burnout-loop.wav")); using var d = File.OpenRead(Path.Combine(root, "audio/v8-drive-loop.wav"));
 var audio = new EngineSamples(Pcm.Load(b), Pcm.Load(d)); float[] buffer = new float[8820];
@@ -127,6 +153,14 @@ Assert(buffer.All(x => x == 0), "Engine reaches exact silence after stop");
 audio.Set("drive", 0); for (int i = 0; i < 10; i++) audio.Read(buffer, 0, buffer.Length);
 Assert(Rms(buffer) < .00001, "Volume zero silences actual output");
 audio.Set("drive", .45f); audio.Read(buffer, 0, buffer.Length); Assert(Rms(buffer) > .005, "Changing volume restores real driving audio");
+
+float[] crashSound = ImpactSound.Crash(), thudSound = ImpactSound.Thud();
+Assert(crashSound.Max(Math.Abs) > .5 && crashSound[^1] == 0 && thudSound.Max(Math.Abs) > .5 && thudSound[^1] == 0, "Synthesized crash and landing sounds are loud and end in silence");
+audio.Set("silent", .45f); for (int i = 0; i < 4; i++) audio.Read(buffer, 0, buffer.Length);
+audio.Play(crashSound, 1); audio.Read(buffer, 0, buffer.Length);
+Assert(Rms(buffer) > .02, "Crash sound plays over a silent engine");
+for (int i = 0; i < 8; i++) audio.Read(buffer, 0, buffer.Length);
+Assert(buffer.All(x => x == 0), "Crash sound finishes and leaves silence");
 
 using var rsa = RSA.Create(3072); string publicKey = rsa.ExportSubjectPublicKeyInfoPem();
 string package = Path.Combine(Path.GetTempPath(), "touareg-update-test-" + Guid.NewGuid() + ".exe");

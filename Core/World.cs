@@ -8,6 +8,8 @@ public record Pose(string Sequence, int Frame, double X, double Y, double Angle,
 public record Ramp(double X, double Y, double Width, double Height, int Direction);
 public sealed record Particle(double X, double Y, double Vx, double Vy, double Radius, double Age, double Life);
 public sealed record Streak(double X, double Y, int Direction, double Age, double Length);
+// A bump worth hearing: Strength 0..1, Metal for wall hits, otherwise a landing thud.
+public sealed record Impact(double Strength, bool Metal);
 public enum Motion { Drive, Burnout, Jump, Land, Turn, Drag, Fall, Crash }
 
 public sealed class World
@@ -20,7 +22,7 @@ public sealed class World
     static readonly double[] LandContact = [68, 68, 49, 49, 46, 47];
     static readonly double[] TiltContact = [89, 49, 47, 65, 84, 45];
     static readonly int[] CrashFrames = [4, 4, 3, 1, 0, 2];
-    const double Contact = 47, CrashTime = .7;
+    const double Contact = 47, CrashTime = .7, TurnTime = .62, HoldDelay = .15;
     readonly Random random = new(42);
     List<Surface> surfaces = [];
     List<Area> screens = [];
@@ -30,7 +32,9 @@ public sealed class World
     double sx, sy, tx, ty, flightTime, startV, endV, arc;
     double rememberedLeft, dpi = 96;
     double fy, vx, vy, grabX, grabY, cursorX, cursorY, swing, swingV, airTime, shake, bounce, hopTimer = 2;
-    bool driveOff, bounced;
+    double driveClock, holdTime, rampGrow;
+    Ramp? lastRamp;
+    bool driveOff, bounced, turnPuffed;
     public double X { get; private set; }
     public double Velocity { get; private set; }
     public int Direction { get; private set; } = 1;
@@ -49,6 +53,7 @@ public sealed class World
     public int Crashes { get; private set; }
     public List<Particle> Particles { get; } = [];
     public List<Streak> Streaks { get; } = [];
+    public Queue<Impact> Impacts { get; } = new();
     double Half => 220 * Scale;
     double Unit => Scale / (194.0 / 440);
     double ClampX(Surface s, double x) => Math.Clamp(x, s.Left + Half + 10 * Unit, s.Right - Half - 10 * Unit);
@@ -100,6 +105,7 @@ public sealed class World
         double shift = match.Left - rememberedLeft;
         X += shift; Attach(match);
         if (hop is not null) hop = hop with { Takeoff = hop.Takeoff + shift };
+        if (lastRamp is not null) lastRamp = lastRamp with { X = lastRamp.X + shift, Y = match.Y };
         if (X < match.Left - 24 || X > match.Right + 24) Drop();
     }
 
@@ -113,8 +119,8 @@ public sealed class World
     {
         var start = surfaces.FirstOrDefault(s => !s.Floor) ?? surfaces.FirstOrDefault();
         surface = null; target = null; hop = null; Phase = Motion.Drive; phaseAge = 0; Velocity = 0; Direction = 1;
-        Held = false; EngineArmed = false; boost = 0; charge = 0; shake = 0;
-        Particles.Clear(); Streaks.Clear();
+        Held = false; EngineArmed = false; boost = 0; charge = 0; shake = 0; rampGrow = 0; lastRamp = null;
+        Particles.Clear(); Streaks.Clear(); Impacts.Clear();
         if (start is not null)
         {
             Attach(start);
@@ -129,12 +135,13 @@ public sealed class World
     {
         if (Paused && held) return;
         if (held == Held) return;
-        Held = held;
-        if (held && Phase == Motion.Drive) BeginBurnout();
-        else if (!held && Phase == Motion.Drag) Throw();
-        else if (!held && Phase == Motion.Burnout)
+        Held = held; holdTime = 0;
+        if (held) pending = Phase == Motion.Drive;
+        else if (Phase == Motion.Drag) Throw();
+        else if (Phase == Motion.Burnout || Phase == Motion.Drive && pending)
         {
-            Phase = Motion.Drive; phaseAge = 0; boost = 3.4; Velocity = 0;
+            // A quick click still launches; a long hold launches harder.
+            Phase = Motion.Drive; phaseAge = 0; boost = 3.4; Velocity = 0; EngineArmed = true; pending = false;
             for (int i = 0; i < 16; i++) Smoke();
         }
     }
@@ -150,7 +157,7 @@ public sealed class World
         if (!Held || Paused || Phase == Motion.Drag) return;
         var p = Pose; X = p.X; fy = p.Y;
         surface = null; target = null; hop = null;
-        Phase = Motion.Drag; phaseAge = 0; vx = vy = 0; swing = swingV = 0;
+        Phase = Motion.Drag; phaseAge = 0; vx = vy = 0; swing = swingV = 0; pending = false;
         Velocity = 0; boost = 0; charge = 0; EngineArmed = false;
     }
 
@@ -177,9 +184,17 @@ public sealed class World
         Phase = Motion.Fall; phaseAge = 0; airTime = 0; bounced = false;
     }
 
+    // Pressed but not yet decided between a burnout and picking the car up.
+    bool pending;
+
     void BeginBurnout()
     {
-        Phase = Motion.Burnout; phaseAge = 0; Velocity = 0; charge = 0; EngineArmed = true;
+        Phase = Motion.Burnout; phaseAge = 0; Velocity = 0; charge = 0; EngineArmed = true; pending = false;
+    }
+
+    void Bang(double strength, bool metal)
+    {
+        if (strength > .05 && Impacts.Count < 8) Impacts.Enqueue(new(Math.Clamp(strength, 0, 1), metal));
     }
 
     // A ramp at the end of the support towards a window ahead (or a higher/lower neighbouring screen).
@@ -204,7 +219,7 @@ public sealed class World
     Plan? Hop()
     {
         if (surface is null) return null;
-        var s = surface; double reach = 300 * Unit;
+        var s = surface;
         double lo = s.Left + Half + 12 * Unit, hi = s.Right - Half - 12 * Unit;
         List<Plan> options = [];
         foreach (var t in surfaces)
@@ -214,9 +229,12 @@ public sealed class World
             if (rise < 90 * Unit || rise > 520 * Unit) continue;
             double h = CarWidth * t.Dpi / 96 / 2 + 12 * t.Dpi / 96;
             if (t.Left + h > t.Right - h) continue;
-            double land = Math.Clamp(X + Direction * (160 * Unit + reach), t.Left + h, t.Right - h), take = land - Direction * reach;
-            if (Direction * (take - X) < 140 * Unit || take < lo - 1 || take > hi + 1) continue;
-            options.Add(new(t, take, land));
+            foreach (double reach in new[] { 300 * Unit, 220 * Unit, 380 * Unit })
+            {
+                double land = Math.Clamp(X + Direction * (160 * Unit + reach), t.Left + h, t.Right - h), take = land - Direction * reach;
+                if (Direction * (take - X) < 140 * Unit || take < lo - 1 || take > hi + 1) continue;
+                options.Add(new(t, take, land)); break;
+            }
         }
         return options.Count == 0 ? null : options[random.Next(options.Count)];
     }
@@ -233,29 +251,30 @@ public sealed class World
 
     Plan? CurrentPlan => Validate(hop) ?? EdgeJump();
 
-    Edge EdgeMode(Surface s)
+    (Edge Mode, double Wall) EdgeMode(Surface s)
     {
-        if (Link(s, Direction) is not null) return Edge.Link;
         double edge = Direction > 0 ? s.Right : s.Left;
-        // Nothing beyond this edge: it is the outer wall of the desktop.
-        if (!Covered(edge + Direction * 24, s.Y - 20 * Unit)) return Edge.Wall;
-        return s.Floor || driveOff ? Edge.DriveOff : Edge.Turn;
+        if (Link(s, Direction) is not null) return (Edge.Link, edge);
+        double y = s.Y - 20 * Unit;
+        // The outer wall of the desktop, close enough that the car cannot drop past the edge.
+        if (ScreenAt(edge, y) is { } a)
+        {
+            double wall = Direction > 0 ? a.Right : a.Left;
+            if (!Covered(wall + Direction * 2, y) && Direction * (wall - edge) < Half + 12 * Unit) return (Edge.Wall, wall);
+        }
+        return (s.Floor || driveOff ? Edge.DriveOff : Edge.Turn, edge);
     }
 
-    public Ramp? CurrentRamp
-    {
-        get
-        {
-            if (surface is null || Phase is not (Motion.Drive or Motion.Burnout)) return null;
-            if (CurrentPlan is not { } plan) return null;
-            return new Ramp(plan.Takeoff - Direction * 78 * Unit, surface.Y, 68 * Unit, 30 * Unit, Direction);
-        }
-    }
+    Ramp? FullRamp => surface is null || Phase is not (Motion.Drive or Motion.Burnout) || CurrentPlan is not { } plan ? null
+        : new Ramp(plan.Takeoff - Direction * 78 * Unit, surface.Y, 68 * Unit, 30 * Unit, Direction);
+
+    // The ramp unfolds before use and folds away after take-off.
+    public Ramp? CurrentRamp => lastRamp is null || rampGrow <= 0 ? null : lastRamp with { Height = lastRamp.Height * Smooth(Math.Clamp(rampGrow, 0, 1)) };
 
     double GroundAt(double x)
     {
         if (surface is null) return fy + Contact * Scale;
-        var ramp = CurrentRamp;
+        var ramp = Phase is Motion.Drive or Motion.Burnout ? CurrentRamp : null;
         return ramp is null ? surface.Y : surface.Y - ramp.Height * Math.Clamp(Direction * (x - ramp.X) / ramp.Width, 0, 1);
     }
 
@@ -272,7 +291,7 @@ public sealed class World
         double rise = Math.Max(0, sy - ty);
         flightTime = (boost > 0 ? .70 : 1.05) + rise / (520 * Unit) * .35;
         arc = 110 * Unit + rise * .35;
-        startV = Direction * Velocity; endV = Direction * (boost > 0 ? 210 : 135) * Unit * Speed;
+        startV = Direction * Velocity; endV = Direction * Math.Max(165 * Unit * Speed, boost > 0 ? Velocity * .8 : 0);
         Phase = Motion.Jump; phaseAge = 0; Jumps++; hop = null;
     }
 
@@ -314,11 +333,30 @@ public sealed class World
                 return new("tilt", i, X + Math.Sin(phaseAge * 75) * 5 * Unit * k, surface!.Y - TiltContact[i] * Scale, 0, Direction, 1);
             }
             var ground = Ground();
-            if (Phase == Motion.Turn) return new("drive", 0, X, ground.Y, 0, Direction, Math.Cos(Math.PI * Math.Clamp(phaseAge / .48, 0, 1)));
+            if (Phase == Motion.Turn) return TurnPose(ground.Y);
             double angle = ground.Angle - (boost > 0 && phaseAge < .35 ? 3 * (1 - phaseAge / .35) : 0);
             double vibration = Phase == Motion.Burnout ? Math.Sin(age * 43) * .7 * Unit : 0;
-            return new("drive", (int)(age * (Phase == Motion.Burnout ? 22 : 12)) % 6, X, ground.Y + vibration, angle, Direction, 1);
+            return new("drive", (int)driveClock % 6, X, ground.Y + vibration, angle, Direction, 1);
         }
+    }
+
+    // Nose dip, a quick hop with the flip hidden mid-air, then the suspension settles.
+    Pose TurnPose(double groundY)
+    {
+        double t = phaseAge, ground = surface!.Y;
+        if (t < .12)
+        {
+            int i = t < .06 ? 3 : 4;
+            return new("tilt", i, X, ground - TiltContact[i] * Scale, 0, Direction, 1);
+        }
+        if (t < .46)
+        {
+            double p = (t - .12) / .34, lift = 24 * Unit * Math.Sin(Math.PI * p);
+            double flip = Math.Cos(Math.PI * Smooth(Math.Clamp((t - .19) / .18, 0, 1)));
+            return new("jump", 3, X, groundY - lift, -6 * Math.Sin(Math.PI * p) - JumpPitch[3], Direction, flip);
+        }
+        int k = Math.Min(5, 3 + (int)((t - .46) / (TurnTime - .46) * 3));
+        return new("land", k, X, ground - LandContact[k] * Scale, 0, Direction, -1);
     }
 
     void Smoke(bool impact = false)
@@ -371,6 +409,15 @@ public sealed class World
                 Streaks.Add(new(p.X - Direction * 80 * Unit, p.Y - (30 + random.NextDouble() * 65) * Unit, Direction, 0, (20 + random.NextDouble() * 45) * Unit));
             }
         }
+        driveClock += dt * (Phase == Motion.Burnout ? 22 : 12 * Math.Clamp(Velocity / (165 * Unit), 0, 2.2));
+        var full = FullRamp;
+        if (full is not null)
+        {
+            // A different ramp (new target or direction) unfolds from scratch.
+            if (lastRamp is null || lastRamp.Direction != full.Direction || Math.Abs(lastRamp.X - full.X) > 4 * Unit) rampGrow = 0;
+            lastRamp = full; rampGrow = Math.Min(1, rampGrow + dt / .28);
+        }
+        else if ((rampGrow = Math.Max(0, rampGrow - dt / .3)) == 0) lastRamp = null;
         if (Phase == Motion.Drag) { DragTick(dt); return; }
         if (Phase == Motion.Fall) { FallTick(dt); return; }
         if (Phase == Motion.Burnout)
@@ -385,7 +432,7 @@ public sealed class World
             {
                 Attach(target); target = null;
                 X = ClampX(surface!, tx); Velocity = Math.Abs(endV); Phase = Motion.Land; phaseAge = 0;
-                hopTimer = 2 + random.NextDouble() * 4;
+                hopTimer = 1 + random.NextDouble() * 3; Bang(.3, false);
                 for (int i = 0; i < 12; i++) Smoke(true);
             }
             return;
@@ -395,7 +442,7 @@ public sealed class World
             Velocity = Approach(Velocity, Math.Min(Velocity, 210 * Unit * Speed), 600 * Unit * dt);
             X = Math.Clamp(X + Direction * Velocity * dt, surface!.Left, surface.Right);
             WheelSpin += Velocity / (Contact * Scale) * dt;
-            if (phaseAge >= .34) { Phase = Motion.Drive; phaseAge = 0; Decide(); if (Held) BeginBurnout(); }
+            if (phaseAge >= .34) { Phase = Motion.Drive; phaseAge = 0; Decide(); }
             return;
         }
         if (Phase == Motion.Crash)
@@ -406,10 +453,22 @@ public sealed class World
         }
         if (Phase == Motion.Turn)
         {
-            if (phaseAge >= .48) { Direction *= -1; Turns++; Phase = Motion.Drive; phaseAge = 0; Decide(); if (Held) BeginBurnout(); }
+            if (phaseAge >= .12 && !turnPuffed)
+            {
+                turnPuffed = true;
+                for (int i = 0; i < 10; i++) Puff(X + (i % 2 == 0 ? 1 : -1) * 133 * Scale, surface!.Y - 3 * Unit, true);
+            }
+            if (phaseAge >= TurnTime) { Direction *= -1; Turns++; Phase = Motion.Drive; phaseAge = 0; Decide(); }
             return;
         }
-        if (Held) { BeginBurnout(); return; }
+        if (Held)
+        {
+            // Brake under the cursor; only a hold without moving the mouse becomes a burnout.
+            pending = true; holdTime += dt;
+            Velocity = Approach(Velocity, 0, 2400 * Unit * dt); X += Direction * Velocity * dt;
+            if (holdTime >= HoldDelay) BeginBurnout();
+            return;
+        }
         DriveTick(dt);
     }
 
@@ -427,12 +486,12 @@ public sealed class World
         if (hop is null && hopTimer <= 0)
         {
             // Only sometimes take a ramp up; otherwise look again later.
-            hop = random.NextDouble() < .55 ? Hop() : null;
-            hopTimer = hop is null ? 1.5 : 0;
+            hop = random.NextDouble() < .7 ? Hop() : null;
+            hopTimer = hop is null ? 1 : 0;
         }
         hop = Validate(hop);
         var plan = hop ?? EdgeJump();
-        var mode = plan is null ? EdgeMode(s) : Edge.Turn;
+        var (mode, wall) = plan is null ? EdgeMode(s) : (Edge.Turn, edge);
         double endpoint = Direction > 0 ? s.Right - Half - 12 * Unit : s.Left + Half + 12 * Unit;
         double distance = Math.Max(0, Direction * (endpoint - X));
         double goal = 165 * Unit * Speed * (boost > 0 ? 2.15 + .65 * charge : 1);
@@ -445,9 +504,9 @@ public sealed class World
         }
         else if (mode == Edge.Wall)
         {
-            if (Direction * (X + Direction * Half - edge) >= 0)
+            if (Direction * (X + Direction * Half - wall) >= 0)
             {
-                X = edge - Direction * Half;
+                X = wall - Direction * Half;
                 if (Velocity > 70 * Unit) Crash(); else StartTurn();
             }
         }
@@ -455,11 +514,11 @@ public sealed class World
             StartTurn();
     }
 
-    void StartTurn() { Velocity = 0; Phase = Motion.Turn; phaseAge = 0; EngineArmed = false; boost = 0; }
+    void StartTurn() { Velocity = 0; Phase = Motion.Turn; phaseAge = 0; EngineArmed = false; boost = 0; turnPuffed = false; }
 
     void Crash()
     {
-        Crashes++; bounce = Math.Max(60 * Unit, Velocity * .45);
+        Crashes++; bounce = Math.Max(60 * Unit, Velocity * .45); Bang(Velocity / (420 * Unit), true);
         double front = X + Direction * Half;
         for (int i = 0; i < 14; i++) Puff(front, surface!.Y - (10 + random.NextDouble() * 40) * Unit, true, -Direction * 60 * Unit);
         StartTurn(); Phase = Motion.Crash;
@@ -516,17 +575,17 @@ public sealed class World
     void Hit(double speed, int side)
     {
         if (speed < 250 * Unit) return;
-        Crashes++; shake = .3;
+        Crashes++; shake = .3; Bang(speed / (1500 * Unit), true);
         for (int i = 0; i < 12; i++) Puff(X + side * Half, fy - random.NextDouble() * 60 * Unit, true, -side * 80 * Unit);
     }
 
     void Touchdown(Surface s)
     {
-        fy = s.Y - Contact * Scale;
+        fy = s.Y - Contact * Scale; Bang(vy / (1800 * Unit), false);
         for (int i = 0; i < (vy > 900 * Unit ? 16 : 10); i++) Puff(X + (random.NextDouble() - .5) * 2 * Half, s.Y - 3 * Unit, true);
         if (vy > 1300 * Unit && !bounced) { vy = -vy * .28; vx *= .7; bounced = true; shake = .2; return; }
         Attach(s); X = Math.Clamp(X, s.Left, s.Right);
         Velocity = Math.Sign(vx) == Direction ? Math.Min(Math.Abs(vx), 420 * Unit) : 0;
-        Phase = Motion.Land; phaseAge = 0; hopTimer = 2 + random.NextDouble() * 4;
+        Phase = Motion.Land; phaseAge = 0; hopTimer = 1 + random.NextDouble() * 3;
     }
 }

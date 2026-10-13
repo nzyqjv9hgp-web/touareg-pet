@@ -15,7 +15,7 @@ internal sealed class SettingsWindow : Form
         AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
         var title = new Label { Text = "Мини-я на Touareg", Font = new("Segoe UI Semibold", 19), Location = new(26, 22), AutoSize = true };
         Controls.Add(title);
-        Controls.Add(new Label { Text = "Зажми ЛКМ на машине — бернаут. Отпусти — разгон.\nМеню открывается правой кнопкой.", Location = new(28, 64), Size = new(480, 44), ForeColor = Color.FromArgb(75, 88, 109) });
+        Controls.Add(new Label { Text = "Зажми ЛКМ на машине — бернаут, отпусти — разгон.\nПотяни мышью — перенесёшь и бросишь. Меню — правой кнопкой.", Location = new(28, 64), Size = new(480, 44), ForeColor = Color.FromArgb(75, 88, 109) });
         Slider("Размер", 118, 150, 280, s.Size, value => { s.Size = value; Changed?.Invoke(); }, "пикс.");
         Slider("Скорость", 179, 50, 150, s.Speed, value => { s.Speed = value; Changed?.Invoke(); }, "%");
         Slider("Громкость V8", 240, 0, 100, s.Volume, value => { s.Volume = value; Changed?.Invoke(); }, "%");

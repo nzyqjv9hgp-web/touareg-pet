@@ -43,7 +43,14 @@ public sealed class EngineSamples(Pcm burnout, Pcm drive)
             return Pcm.Samples[Position++];
         }
     }
+    sealed class Shot(float[] mono, float gain)
+    {
+        public readonly float[] Mono = mono;
+        public readonly float Gain = gain;
+        public int Position;
+    }
     readonly object gate = new();
+    readonly List<Shot> shots = [];
     Voice? current, retiring;
     string mode = "silent";
     float gain, desiredGain;
@@ -59,6 +66,16 @@ public sealed class EngineSamples(Pcm burnout, Pcm drive)
             current = next == "drive" ? new(drive, true) : next == "burnout" ? new(burnout, false) : null;
         }
     }
+    // Mono one-shot mixed over the engine on both channels, e.g. a crash or a landing.
+    public void Play(float[] mono, float strength)
+    {
+        lock (gate)
+        {
+            if (shots.Count >= 6) shots.RemoveAt(0);
+            shots.Add(new(mono, Math.Clamp(strength, 0, 1)));
+        }
+    }
+
     public int Read(float[] buffer, int offset, int count)
     {
         lock (gate)
@@ -74,6 +91,13 @@ public sealed class EngineSamples(Pcm burnout, Pcm drive)
                 {
                     retiring.Fade = Math.Max(0, retiring.Fade - fadeStep); value += retiring.Next() * retiring.Fade;
                     if (retiring.Fade <= 0) retiring = null;
+                }
+                for (int k = shots.Count - 1; k >= 0; k--)
+                {
+                    var shot = shots[k];
+                    value += shot.Mono[shot.Position] * shot.Gain;
+                    // Interleaved stereo: advance the mono shot after the right channel.
+                    if ((offset + i) % 2 == 1 && ++shot.Position >= shot.Mono.Length) shots.RemoveAt(k);
                 }
                 buffer[offset + i] = value * gain;
             }
