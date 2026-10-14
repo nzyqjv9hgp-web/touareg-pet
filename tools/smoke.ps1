@@ -142,10 +142,36 @@ Start-Sleep -Seconds 3
 Shot "05-after-click"
 if ($process.HasExited) { Fail "The pet crashed (exit code $($process.ExitCode))" } else { Pass "Still running after drag, throw and click" }
 
+# Web page blocks: open a local page in Edge and see whether the car gets onto one of its blocks.
+$page = (Resolve-Path (Join-Path $PSScriptRoot "smoke-page.html")).Path
+$edge = Get-Command msedge -ErrorAction SilentlyContinue
+$edgePath = if ($edge) { $edge.Source } else { "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe" }
+if (Test-Path $edgePath)
+{
+    $browser = Start-Process -FilePath $edgePath -ArgumentList "--new-window", "--start-maximized", "--no-first-run", "--no-default-browser-check", "--user-data-dir=$env:RUNNER_TEMP\edge-smoke", "file:///$($page -replace '\\','/')" -PassThru
+    Start-Sleep -Seconds 6
+    Shot "06-browser"
+    $floor = $wa.Bottom; $onPage = 0; $samples = @()
+    for ($i = 0; $i -lt 60; $i++)
+    {
+        Start-Sleep -Milliseconds 500; $c = Car $pet; $samples += "($($c.X),$($c.Y))"
+        # Above the taskbar and not at the very top: riding (or jumping between) blocks of the page.
+        if ($c.Y -lt $floor - 60 -and $c.Y -gt $wa.Top + 120) { $onPage++ }
+        if ($i -eq 20) { Shot "07-page" }
+        if ($i -eq 40) { Shot "08-page" }
+    }
+    Write-Host ("Car on the page: " + ($samples -join " "))
+    if ($onPage -ge 4) { Pass "Car drives on web page blocks in the browser ($onPage of 60 samples)" }
+    else { Fail "Car never got onto the web page blocks ($onPage of 60 samples)" }
+    Stop-Process -Id $browser.Id -Force -ErrorAction SilentlyContinue
+}
+else { Write-Host "Edge not found, page check skipped" }
+
 $log = Join-Path $env:LOCALAPPDATA "TouaregPet\diagnostics.log"
 if (Test-Path $log) { Copy-Item $log "$Out/diagnostics.log"; $text = Get-Content $log -Raw; Write-Host "diagnostics.log:"; Write-Host $text
     if ($text -match " (UI|startup|scan): ") { Fail "Errors in diagnostics.log" }
-    if ($text -match " render3d: ") { Fail "The 3D renderer failed and the pet fell back to sprites" } }
+    if ($text -match " render3d: ") { Fail "The 3D renderer failed and the pet fell back to sprites" }
+    if ($text -match " pages: ") { Fail "Reading web pages failed" } }
 else { Pass "No diagnostics.log errors" }
 if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
 if ($failures.Count) { Write-Host "$($failures.Count) smoke check(s) failed"; exit 1 }

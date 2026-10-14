@@ -14,10 +14,12 @@ internal sealed class DesktopWatcher : IDisposable
     Snapshot? latest;
     volatile bool running = true;
     volatile int carWidth;
+    readonly PageWatcher pages;
 
-    internal DesktopWatcher(int width)
+    internal DesktopWatcher(int width, PageWatcher pages)
     {
-        carWidth = width;
+        carWidth = width; this.pages = pages;
+        pages.Changed += () => wake.Set();
         callback = (_, _, _, idObject, idChild, _, _) => { if (idObject == 0 && idChild == 0) wake.Set(); };
         // Out-of-context hooks are delivered through this (UI) thread's message loop. Own windows are skipped.
         hooks =
@@ -31,7 +33,7 @@ internal sealed class DesktopWatcher : IDisposable
 
     internal int CarWidth { set { if (carWidth != value) { carWidth = value; wake.Set(); } } }
     internal Snapshot? Take() => Interlocked.Exchange(ref latest, null);
-    internal static Snapshot Scan(int width) => new(Desktop.Scan(width), Desktop.Screens(), Desktop.Fullscreen());
+    internal Snapshot Scan(int width) => new(Desktop.Scan(width, pages.Pages), Desktop.Screens(), Desktop.Fullscreen());
 
     void Loop()
     {

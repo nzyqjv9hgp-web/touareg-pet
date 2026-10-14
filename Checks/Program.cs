@@ -161,6 +161,29 @@ using (var glb = File.OpenRead(Path.Combine(root, "car/porsche-930.glb")))
         "Textures decode without colour management: matte tyres (roughness .88) and metal rims (metallic 1) survive");
 }
 
+var viewport = new Box(0, 100, 150, 1500, 900);
+var ledges = PageBlocks.Ledges(
+[
+    new(1, 120, 300, 1400, 600), new(2, 140, 302, 1300, 360),   // a card and its heading share a top edge
+    new(3, 0, 500, 2000, 700),                                  // wider than the page: clipped to the viewport
+    new(4, 200, 160, 900, 260),                                 // glued to the top of the page
+    new(5, 300, 650, 380, 700),                                 // too narrow for the car
+    new(6, 200, 950, 900, 1000),                                // below the visible page
+    new(7, 200, 800, 900, 803),                                 // a hairline, not a block
+], viewport, 218);
+Assert(ledges.Count == 2 && ledges.Any(l => l.Key == 1) && ledges.Any(l => l.Key == 3 && l.Left == 100 && l.Right == 1500),
+    "Page blocks become ledges: visible, wide enough, one per height, clipped to the page");
+long idA = PageBlocks.SurfaceId(0x1234, [42, 7, 1]), idB = PageBlocks.SurfaceId(0x1234, [42, 7, 2]);
+Assert(idA != idB && idA == PageBlocks.SurfaceId(0x1234, [42, 7, 1]) && idA > 1L << 48 && idB > 1L << 48,
+    "Page element ids are stable, distinct and never collide with window handles or floors");
+var browse = new World(); browse.SetScreens([monitor]);
+browse.SetSurfaces([new(idA, 300, 1500, 600), taskbar]); Tick(browse, .5);
+double onPage = browse.X; browse.SetSurfaces([new(idA, 300, 1500, 520), taskbar]); Tick(browse, .02);
+Assert(browse.SurfaceId == idA && Math.Abs(browse.State.Ground - 520) < .001 && Math.Abs(browse.X - onPage) < 10,
+    "The car rides a page block up when the page scrolls");
+browse.SetSurfaces([taskbar]);
+Assert(browse.Phase == Motion.Fall, "A block scrolled out of view drops the car");
+
 var drive3d = new World(); drive3d.SetScreens([monitor]); drive3d.SetSurfaces([new(5, 300, 1500, 700), taskbar]);
 var chassis = new Chassis(2.6, .36);
 double ppu = drive3d.Scale * 440 / 4.88, minPitch = 0, maxLift = 0, minLift = 0, burnRear = 0, burnFront = 0;

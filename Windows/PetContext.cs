@@ -17,6 +17,7 @@ internal sealed class PetContext : ApplicationContext
     readonly Stopwatch clock = Stopwatch.StartNew();
     readonly ToolStripMenuItem pause = new("Пауза"), updateItem = new("Проверить обновления"), restart = new("Перезапустить для обновления") { Visible = false };
     readonly DesktopWatcher watcher;
+    readonly PageWatcher pages;
     readonly FrameClock frames;
     SettingsWindow? preferences;
     double last, topmost;
@@ -25,7 +26,7 @@ internal sealed class PetContext : ApplicationContext
 
     internal PetContext(bool welcome)
     {
-        renderer = new(sprites, Renderer3D.TryCreate()); watcher = new(settings.Size);
+        renderer = new(sprites, Renderer3D.TryCreate()); pages = new(settings.Size, settings.Pages); watcher = new(settings.Size, pages);
         var menu = new ContextMenuStrip();
         pause.Click += (_, _) => SetPause(!world.Paused);
         menu.Items.Add(pause);
@@ -59,8 +60,12 @@ internal sealed class PetContext : ApplicationContext
         else Balloon("Touareg на рабочем столе. Меню — правой кнопкой по машине или значку рядом с часами.");
     }
 
-    void Apply() { world.CarWidth = settings.Size; world.Speed = settings.Speed / 100.0; watcher.CarWidth = settings.Size; }
-    void Rescan() => Use(DesktopWatcher.Scan(settings.Size));
+    void Apply()
+    {
+        world.CarWidth = settings.Size; world.Speed = settings.Speed / 100.0; watcher.CarWidth = settings.Size;
+        pages.CarWidth = settings.Size; pages.Enabled = settings.Pages;
+    }
+    void Rescan() => Use(watcher.Scan(settings.Size));
     void Use(DesktopWatcher.Snapshot snapshot)
     {
         world.SetScreens(snapshot.Screens); world.SetSurfaces(snapshot.Surfaces); fullscreen = snapshot.Fullscreen;
@@ -107,7 +112,7 @@ internal sealed class PetContext : ApplicationContext
     protected override void ExitThreadCore()
     {
         if (disposed) return; disposed = true;
-        frames.Dispose(); watcher.Dispose(); updateTimer.Stop(); settings.Save(); world.Hold(false);
+        frames.Dispose(); watcher.Dispose(); pages.Dispose(); updateTimer.Stop(); settings.Save(); world.Hold(false);
         tray.Visible = false; tray.Dispose(); audio.Dispose(); renderer.Dispose(); sprites.Dispose();
         preferences?.Dispose(); pet.Dispose(); effects.Dispose(); updateTimer.Dispose();
         base.ExitThreadCore();
