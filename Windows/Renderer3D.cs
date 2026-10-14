@@ -89,7 +89,7 @@ internal sealed class Renderer3D : IDisposable
 
         albedo = Texture(model.Albedo); metalRough = Texture(model.MetalRough);
         sampler = Own(device.CreateSamplerState(new SamplerDescription(Filter.Anisotropic, TextureAddressMode.Wrap, 0, 8)));
-        // Two-sided: downloaded models are not reliably wound; the shader flips back-facing normals.
+        // Two-sided: downloaded models are not reliably wound; the shader orients normals towards the viewer.
         rasterizer = Own(device.CreateRasterizerState(new RasterizerDescription(CullMode.None, FillMode.Solid) { MultisampleEnable = true, DepthClipEnable = true }));
         opaque = Own(device.CreateBlendState(BlendDescription.Opaque));
         premultiplied = Own(device.CreateBlendState(new BlendDescription(Blend.One, Blend.InverseSourceAlpha, Blend.One, Blend.InverseSourceAlpha)));
@@ -110,20 +110,30 @@ internal sealed class Renderer3D : IDisposable
     Mesh Upload(MeshPart part) =>
         new(Own(device.CreateBuffer(part.Vertices, BindFlags.VertexBuffer)), Own(device.CreateBuffer(part.Indices, BindFlags.IndexBuffer)), part);
 
-    unsafe ID3D11ShaderResourceView Texture(byte[] encoded)
+    ID3D11ShaderResourceView Texture(byte[] encoded)
+    {
+        int width, height; byte[] bgra;
+        if (encoded[0] == 0x89) (width, height, bgra) = Png.Decode(encoded);
+        else (width, height, bgra) = Gdi(encoded);   // JPEG: colour data only, so GDI+ decoding is fine
+        // Full mip chain, so the 2K atlas stays smooth when the car is only a couple of hundred pixels long.
+        var texture = Own(device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)width, (uint)height, 1, 0,
+            BindFlags.ShaderResource | BindFlags.RenderTarget, ResourceUsage.Default, CpuAccessFlags.None, 1, 0, ResourceOptionFlags.GenerateMips)));
+        context.UpdateSubresource(bgra, texture, 0, (uint)width * 4);
+        var view = Own(device.CreateShaderResourceView(texture));
+        context.GenerateMips(view);
+        return view;
+    }
+
+    static (int, int, byte[]) Gdi(byte[] encoded)
     {
         using var stream = new MemoryStream(encoded);
         using var image = new Bitmap(stream);
         var data = image.LockBits(new Rectangle(0, 0, image.Width, image.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         try
         {
-            // Full mip chain, so the 2K atlas stays smooth when the car is only a couple of hundred pixels long.
-            var texture = Own(device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)image.Width, (uint)image.Height, 1, 0,
-                BindFlags.ShaderResource | BindFlags.RenderTarget, ResourceUsage.Default, CpuAccessFlags.None, 1, 0, ResourceOptionFlags.GenerateMips)));
-            context.UpdateSubresource(new Span<byte>((void*)data.Scan0, data.Stride * image.Height), texture, 0, (uint)data.Stride);
-            var view = Own(device.CreateShaderResourceView(texture));
-            context.GenerateMips(view);
-            return view;
+            var bgra = new byte[image.Width * image.Height * 4];
+            for (int y = 0; y < image.Height; y++) Marshal.Copy(data.Scan0 + y * data.Stride, bgra, y * image.Width * 4, image.Width * 4);
+            return (image.Width, image.Height, bgra);
         }
         finally { image.UnlockBits(data); }
     }
@@ -228,13 +238,14 @@ internal sealed class Renderer3D : IDisposable
         Texture2D MetalRough : register(t1);
         SamplerState Smp : register(s0);
         struct VIn { float3 pos : POSITION; float3 nrm : NORMAL; float2 uv : TEXCOORD0; };
-        struct VOut { float4 pos : SV_Position; float3 nrm : NORMAL; float2 uv : TEXCOORD0; };
+        struct VOut { float4 pos : SV_Position; float3 nrm : NORMAL; float2 uv : TEXCOORD0; float3 at : TEXCOORD1; };
 
         VOut VS(VIn v)
         {
             VOut o;
             float4 w = mul(float4(v.pos, 1), World);
             o.pos = mul(w, ViewProj);
+            o.at = w.xyz;
             o.nrm = mul(v.nrm, (float3x3)World);
             o.uv = v.uv;
             return o;
@@ -249,7 +260,7 @@ internal sealed class Renderer3D : IDisposable
             return c;
         }
 
-        float4 PS(VOut i, bool front : SV_IsFrontFace) : SV_Target
+        float4 PS(VOut i) : SV_Target
         {
             float kind = Params.x;
             if (kind > 2.5)
@@ -258,9 +269,13 @@ internal sealed class Renderer3D : IDisposable
                 float a = (1 - smoothstep(0.3, 1.0, length(q * float2(1.0, 1.15)))) * Params.y;
                 return float4(0, 0, 0, a);
             }
-            float3 n = normalize(i.nrm);
-            if (!front) n = -n;
+            // Orient by the triangle itself, not by winding: the geometric normal is turned towards the viewer and the
+            // shading normal follows it, so meshes wound either way (or seen from behind) are lit from the front.
             float3 v = float3(0, 0, 1);
+            float3 g = normalize(cross(ddx(i.at), ddy(i.at)));
+            if (dot(g, v) < 0) g = -g;
+            float3 n = normalize(i.nrm);
+            if (dot(n, g) < 0) n = -n;
             float3 base = pow(abs(Albedo.Sample(Smp, i.uv).rgb), 2.2);
             float4 mr = MetalRough.Sample(Smp, i.uv);
             float metal = mr.b, rough = clamp(mr.g, 0.06, 1.0), coat = 0;

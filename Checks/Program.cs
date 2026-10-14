@@ -154,6 +154,11 @@ using (var glb = File.OpenRead(Path.Combine(root, "car/porsche-930.glb")))
     Assert(car.WheelRadius is > .3f and < .45f && car.Wheelbase is > 2.4f and < 2.8f && car.Length is > 4.5f and < 5.2f
         && new[] { car.Albedo, car.MetalRough }.All(t => t.Length > 10000 && (t[0] == 0x89 && t[1] == 0x50 || t[0] == 0xFF && t[1] == 0xD8)),
         "Car proportions and embedded PNG/JPEG textures look like a 911");
+    var albedoPixels = Png.Decode(car.Albedo); var orm = Png.Decode(car.MetalRough);
+    int Count(byte[] bgra, Func<byte, byte, byte, bool> test) { int n = 0; for (int i = 0; i < bgra.Length; i += 4) if (test(bgra[i], bgra[i + 1], bgra[i + 2])) n++; return n; }
+    Assert(albedoPixels.Width == 2048 && orm.Width == 1024 && Count(orm.Bgra, (b, g, r) => g is > 215 and < 235 && b < 10) > 1000
+        && Count(orm.Bgra, (b, g, r) => b > 240 && g is > 70 and < 85) > 1000,
+        "Textures decode without colour management: matte tyres (roughness .88) and metal rims (metallic 1) survive");
 }
 
 var drive3d = new World(); drive3d.SetScreens([monitor]); drive3d.SetSurfaces([new(5, 300, 1500, 700), taskbar]);
