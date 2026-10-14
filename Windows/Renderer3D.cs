@@ -277,7 +277,8 @@ internal sealed class Renderer3D : IDisposable
             float k = (rough + 1) * (rough + 1) / 8;
             float G = (ndl / (ndl * (1 - k) + k)) * (ndv / (ndv * (1 - k) + k));
             float3 F0 = lerp(float3(0.04, 0.04, 0.04), base, metal);
-            float3 F = F0 + (1 - F0) * pow(saturate(1 - ndv), 5);
+            // Rough surfaces lose their grazing-angle mirror: tyres and plastics stay matte (Karis' approximation).
+            float3 F = F0 + (max(1 - rough, F0) - F0) * pow(saturate(1 - ndv), 5);
             float3 spec = D * G * F / max(4 * ndl * ndv, 1e-3);
             float3 kd = (1 - metal) * (1 - F);
             float3 hemi = lerp(float3(0.10, 0.10, 0.10), float3(0.62, 0.66, 0.74), n.y * 0.5 + 0.5);

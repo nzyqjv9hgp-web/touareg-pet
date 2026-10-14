@@ -21,6 +21,11 @@ DROP_OBJECTS = {"Object_140", "Object_49"}
 DROP_MATERIALS = ("coat", "stickers", "Material.001")   # clear-coat shell duplicate, alpha decals, ground
 GLASS_MATERIALS = ("glass", "lights_refraction")
 PAINT_MATERIALS = ("paint",)
+# Metallic and roughness per material, by name fragment. The downloaded maps make nearly everything mirror-like
+# (tyres at roughness ~0.1), which reads as chrome at pet size, so these values replace them.
+SURFACE = {"tire": (0, .88), "rim": (1, .3), "chromes": (.8, .32), "plastics": (0, .62), "black": (0, .7),
+           "lights": (0, .12), "plate": (.3, .4), "wunderbaum": (0, .85), "paint": (.6, .3)}
+DEFAULT_SURFACE = (0, .6)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=SRC)
@@ -117,7 +122,11 @@ def bake(kind, image, socket):
             out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL" and n.is_active_output)
             em = nt.nodes.new("ShaderNodeEmission"); em.name = "bake_emit"
             src = bsdf.inputs[socket] if bsdf else None
-            if src is not None and src.links:
+            if socket in ("Metallic", "Roughness"):
+                fixed = next((v for k, v in SURFACE.items() if k in m.name.lower()), DEFAULT_SURFACE)
+                v = fixed[0] if socket == "Metallic" else fixed[1]
+                em.inputs["Color"].default_value = (v, v, v, 1)
+            elif src is not None and src.links:
                 nt.links.new(src.links[0].from_socket, em.inputs["Color"])
             else:
                 v = src.default_value if src is not None else (1.0 if socket == "Roughness" else 0.0)
