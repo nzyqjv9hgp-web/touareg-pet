@@ -5,6 +5,9 @@ public record Surface(long Id, double Left, double Right, double Y, double Dpi =
 // Monitor bounds. Their outer edges are the walls the car bumps into.
 public record Area(double Left, double Top, double Right, double Bottom, double Dpi = 96);
 public record Pose(string Sequence, int Frame, double X, double Y, double Angle, int Direction, double Flip);
+// The car for the 3D renderer: Ground is the line the tyres sit on (or would, while airborne), Pitch is the body's
+// nose-up angle in degrees, Yaw 0 faces screen right and 180 faces left (90: the tail turned towards the viewer).
+public readonly record struct CarState(double X, double Ground, bool Grounded, double Pitch, double Yaw, double Speed, Motion Phase, double PhaseTime);
 public record Ramp(double X, double Y, double Width, double Height, int Direction);
 public sealed record Particle(double X, double Y, double Vx, double Vy, double Radius, double Age, double Life);
 public sealed record Streak(double X, double Y, int Direction, double Age, double Length);
@@ -22,7 +25,7 @@ public sealed class World
     static readonly double[] LandContact = [68, 68, 49, 49, 46, 47];
     static readonly double[] TiltContact = [89, 49, 47, 65, 84, 45];
     static readonly int[] CrashFrames = [4, 4, 3, 1, 0, 2];
-    const double Contact = 47, CrashTime = .7, TurnTime = .62, HoldDelay = .15;
+    const double Contact = 47, CrashTime = .7, TurnTime = .9, HoldDelay = .15;
     readonly Random random = new(42);
     List<Surface> surfaces = [];
     List<Area> screens = [];
@@ -359,6 +362,43 @@ public sealed class World
         return new("land", k, X, ground - LandContact[k] * Scale, 0, Direction, -1);
     }
 
+    // The turnaround is a drift on the spot: the tail swings out towards the viewer, so Yaw always passes 90.
+    double TurnYaw(double t)
+    {
+        double p = Math.Clamp(t / TurnTime, 0, 1), e = .5 - .5 * Math.Cos(Math.PI * Math.Pow(p, .85));
+        return Direction > 0 ? 180 * e : 180 - 180 * e;
+    }
+
+    public CarState State
+    {
+        get
+        {
+            double jolt = shake > 0 ? Math.Sin(age * 80) * 6 * Unit * shake / .3 : 0;
+            double facing = Direction > 0 ? 0 : 180, contact = Contact * Scale;
+            switch (Phase)
+            {
+                case Motion.Drag:
+                    return new(X, fy + contact, false, -Direction * swing, facing, vx, Phase, phaseAge);
+                case Motion.Fall:
+                    double pitch = Math.Clamp(Math.Atan2(vy, Math.Abs(vx) + 400 * Unit) * 180 / Math.PI * .6, -28, 28);
+                    return new(X + jolt, fy + contact, false, -pitch, facing, vx, Phase, phaseAge);
+                case Motion.Jump:
+                    var f = Flight(phaseAge); var g = Flight(phaseAge + .01);
+                    return new(f.X, f.Y + contact, false, 14 - 28 * Smooth(f.P), facing, (g.X - f.X) / .01, Phase, phaseAge);
+                case Motion.Land:
+                    return new(X + jolt, surface?.Y ?? ty + contact, true, 0, facing, Direction * Velocity, Phase, phaseAge);
+                case Motion.Crash:
+                    double k = Math.Max(0, 1 - phaseAge / .45);
+                    return new(X + Math.Sin(phaseAge * 75) * 5 * Unit * k, surface!.Y, true, 0, facing, -Direction * bounce, Phase, phaseAge);
+                case Motion.Turn:
+                    return new(X, surface!.Y, true, 0, TurnYaw(phaseAge), 0, Phase, phaseAge);
+                default:
+                    var ground = Ground();
+                    return new(X, ground.Y + contact, true, -ground.Angle, facing, Phase == Motion.Burnout ? 0 : Direction * Velocity, Phase, phaseAge);
+            }
+        }
+    }
+
     void Smoke(bool impact = false)
     {
         var p = Pose;
@@ -457,6 +497,14 @@ public sealed class World
             {
                 turnPuffed = true;
                 for (int i = 0; i < 10; i++) Puff(X + (i % 2 == 0 ? 1 : -1) * 133 * Scale, surface!.Y - 3 * Unit, true);
+            }
+            // Spinning rear tyres smoke while the tail swings round.
+            double p = phaseAge / TurnTime;
+            if (p > .06 && p < .9)
+            {
+                smokeClock += dt * 46;
+                double tail = -Math.Cos(TurnYaw(phaseAge) * Math.PI / 180), rear = X + tail * 118 * Scale;
+                while (smokeClock >= 1) { smokeClock--; Puff(rear + (random.NextDouble() - .5) * 20 * Unit, surface!.Y - 3 * Unit, true, tail * 70 * Unit); }
             }
             if (phaseAge >= TurnTime) { Direction *= -1; Turns++; Phase = Motion.Drive; phaseAge = 0; Decide(); }
             return;

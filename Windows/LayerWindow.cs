@@ -45,6 +45,9 @@ internal sealed class LayerWindow : Form
         return canvas;
     }
 
+    // Raw premultiplied BGRA rows of the current canvas, for renderers that write pixels directly.
+    internal IntPtr Pixels => pixels;
+
     internal void Present(int x, int y)
     {
         Native.GdiFlush();

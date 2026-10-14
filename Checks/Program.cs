@@ -140,6 +140,51 @@ Assert(turn.Direction == -facing && squashed <= .1 && lowest < -5, "Turns with a
 Assert(bump.Impacts.Any(i => i.Metal) && wall.Impacts.Any(i => i.Metal), "Wall crashes queue a crash sound");
 
 string root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../Assets"));
+
+using (var glb = File.OpenRead(Path.Combine(root, "car/porsche-930.glb")))
+{
+    var car = CarModel.Load(glb);
+    var parts = new[] { car.Body, car.Glass }.Concat(car.Wheels).ToList();
+    Assert(parts.All(p => p.VertexCount > 100 && p.Indices.Length % 3 == 0 && p.Indices.All(i => i < p.VertexCount) && p.Vertices.All(float.IsFinite))
+        && car.Body.Ranges.Any(r => r.Material == MaterialKind.Paint) && car.Glass.Ranges.All(r => r.Material == MaterialKind.Glass),
+        "Car model loads: body with paint, glass and four wheels with valid triangles");
+    Assert(car.Wheels.Take(2).All(w => w.Origin.Z > 1) && car.Wheels.Skip(2).All(w => w.Origin.Z < -1)
+        && car.Wheels[0].Origin.X > 0 && car.Wheels[1].Origin.X < 0 && Math.Abs(car.Wheels.Average(w => w.Origin.Y)) < .01,
+        "Wheels sit front/rear and left/right around the axle-height origin");
+    Assert(car.WheelRadius is > .3f and < .45f && car.Wheelbase is > 2.4f and < 2.8f && car.Length is > 4.5f and < 5.2f
+        && new[] { car.Albedo, car.MetalRough }.All(t => t.Length > 10000 && (t[0] == 0x89 && t[1] == 0x50 || t[0] == 0xFF && t[1] == 0xD8)),
+        "Car proportions and embedded PNG/JPEG textures look like a 911");
+}
+
+var drive3d = new World(); drive3d.SetScreens([monitor]); drive3d.SetSurfaces([new(5, 300, 1500, 700), taskbar]);
+var chassis = new Chassis(2.6, .36);
+double ppu = drive3d.Scale * 440 / 4.88, minPitch = 0, maxLift = 0, minLift = 0, burnRear = 0, burnFront = 0;
+bool sawAir = false, sawTurn = false, passed90 = false, compressedAfterLanding = false;
+Motion previousPhase = drive3d.Phase;
+for (int i = 0; i < 120 * 60; i++)
+{
+    drive3d.Step(1.0 / 120);
+    var s = drive3d.State; var body = chassis.Update(s, 1.0 / 120, ppu, drive3d.WheelSpin);
+    if (!double.IsFinite(s.X + s.Ground + s.Pitch + s.Yaw + s.Speed + body.Lift + body.Pitch + body.Roll + body.FrontSpin + body.RearSpin + body.Steer))
+        throw new Exception("Nonfinite 3D state");
+    if (!s.Grounded) sawAir = true;
+    if (s.Phase == Motion.Turn) { sawTurn = true; if (Math.Abs(s.Yaw - 90) < 8) passed90 = true; }
+    if (s.Phase is Motion.Drive && drive3d.Velocity > 0) minPitch = Math.Min(minPitch, body.Pitch);
+    if (previousPhase is Motion.Jump or Motion.Fall && s.Grounded) compressedAfterLanding = true;
+    if (compressedAfterLanding) minLift = Math.Min(minLift, body.Lift);
+    maxLift = Math.Max(maxLift, Math.Abs(body.Lift));
+    previousPhase = s.Phase;
+}
+Assert(sawAir && sawTurn && passed90, "3D state: flies, and the turnaround swings the tail round through 90°");
+Assert(minPitch < -.5 && minLift < -.02 && maxLift < .25, "Chassis dives when braking, compresses on landing and stays within its travel");
+var burn = new World(); burn.SetSurfaces(windows); Tick(burn, .5);
+var burnChassis = new Chassis(2.6, .36);
+var before3d = burnChassis.Update(burn.State, 1.0 / 120, ppu, burn.WheelSpin);
+burn.Hold(true);
+for (int i = 0; i < 120; i++) { burn.Step(1.0 / 120); var b3 = burnChassis.Update(burn.State, 1.0 / 120, ppu, burn.WheelSpin); burnRear = b3.RearSpin; burnFront = b3.FrontSpin; }
+Assert(burn.Phase == Motion.Burnout && burnRear - before3d.RearSpin > 10 && Math.Abs(burnFront - before3d.FrontSpin) < 2.5,
+    "Burnout spins the rear tyres while the front ones stay put");
+burn.Hold(false);
 using var b = File.OpenRead(Path.Combine(root, "audio/v8-burnout-loop.wav")); using var d = File.OpenRead(Path.Combine(root, "audio/v8-drive-loop.wav"));
 var audio = new EngineSamples(Pcm.Load(b), Pcm.Load(d)); float[] buffer = new float[8820];
 double Rms(float[] a) => Math.Sqrt(a.Select(x => (double)x * x).Average());
@@ -202,7 +247,8 @@ if (args.Length is 3 or 4)
     var names = metadata.ManifestResources.Select(handle => metadata.GetString(metadata.GetManifestResource(handle).Name).Replace('\\', '/')).ToList();
     Assert(names.Count(n => n.StartsWith("Assets/frames/") && n.EndsWith(".png")) == 24
         && names.Contains("Assets/audio/v8-burnout-loop.wav") && names.Contains("Assets/audio/v8-drive-loop.wav")
-        && names.Contains("Assets/update-public.pem") && !names.Any(n => n.Contains("private", StringComparison.OrdinalIgnoreCase)),
-        "Windows assembly embeds all 24 frames, both recordings and only the public update key");
+        && names.Contains("Assets/update-public.pem") && names.Contains("Assets/car/porsche-930.glb")
+        && !names.Any(n => n.Contains("private", StringComparison.OrdinalIgnoreCase)),
+        "Windows assembly embeds the 3D car, all 24 fallback frames, both recordings and only the public update key");
 }
 Console.WriteLine($"All {checks} checks passed.");

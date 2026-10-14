@@ -25,7 +25,7 @@ internal sealed class PetContext : ApplicationContext
 
     internal PetContext(bool welcome)
     {
-        renderer = new(sprites); watcher = new(settings.Size);
+        renderer = new(sprites, Renderer3D.TryCreate()); watcher = new(settings.Size);
         var menu = new ContextMenuStrip();
         pause.Click += (_, _) => SetPause(!world.Paused);
         menu.Items.Add(pause);
@@ -47,7 +47,7 @@ internal sealed class PetContext : ApplicationContext
         audio.Error += message => pet.BeginInvoke(() => { Log.Write("audio", new Exception(message)); Balloon("Звук пока недоступен. Питомец продолжает работать."); });
         updater.Changed += () => { restart.Visible = updater.Ready; preferences?.UpdateStatus(updater.Status); };
         Apply(); Rescan();
-        effects.Show(); pet.Show(); renderer.Draw(world, pet, effects);
+        effects.Show(); pet.Show(); renderer.Draw(world, pet, effects, 0);
         frames = new(pet, Tick);
         updateTimer.Tick += async (_, _) =>
         {
@@ -93,7 +93,7 @@ internal sealed class PetContext : ApplicationContext
         }
         if (!hidden) world.Step(dt);
         audio.Sync(world, settings, hidden);
-        if (!hidden) renderer.Draw(world, pet, effects);
+        if (!hidden) renderer.Draw(world, pet, effects, dt);
     }
     void Preferences()
     {

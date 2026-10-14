@@ -144,7 +144,8 @@ if ($process.HasExited) { Fail "The pet crashed (exit code $($process.ExitCode))
 
 $log = Join-Path $env:LOCALAPPDATA "TouaregPet\diagnostics.log"
 if (Test-Path $log) { Copy-Item $log "$Out/diagnostics.log"; $text = Get-Content $log -Raw; Write-Host "diagnostics.log:"; Write-Host $text
-    if ($text -match " (UI|startup|scan): ") { Fail "Errors in diagnostics.log" } }
+    if ($text -match " (UI|startup|scan): ") { Fail "Errors in diagnostics.log" }
+    if ($text -match " render3d: ") { Fail "The 3D renderer failed and the pet fell back to sprites" } }
 else { Pass "No diagnostics.log errors" }
 if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
 if ($failures.Count) { Write-Host "$($failures.Count) smoke check(s) failed"; exit 1 }

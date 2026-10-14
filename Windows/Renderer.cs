@@ -4,7 +4,7 @@ using Touareg.Core;
 
 namespace Touareg.Windows;
 
-internal sealed class Renderer(Sprites sprites) : IDisposable
+internal sealed class Renderer(Sprites sprites, Renderer3D? car3D) : IDisposable
 {
     // Frames scaled once with high quality for the current car size; each frame then only rotates them (bilinear).
     sealed class Scaled(double scale) : IDisposable
@@ -17,10 +17,26 @@ internal sealed class Renderer(Sprites sprites) : IDisposable
     readonly Bitmap[] puffs = Puffs();
     bool effectsClear;
 
-    internal void Draw(World world, LayerWindow pet, LayerWindow effectWindow)
+    internal void Draw(World world, LayerWindow pet, LayerWindow effectWindow, double dt)
     {
-        var pose = world.Pose; double unit = world.Scale / (194.0 / 440), scale = world.Scale;
-        int w = (int)Math.Ceiling(590 * unit), h = (int)Math.Ceiling(420 * unit);
+        double unit = world.Scale / (194.0 / 440);
+        int w = (int)Math.Ceiling(590 * unit), h = (int)Math.Ceiling(420 * unit), left, top;
+        if (car3D is not null)
+        {
+            try { (left, top) = car3D.Draw(world, dt, pet, w, h); }
+            catch (Exception e)
+            {
+                // A lost or broken GPU device: keep the pet alive with the sprites.
+                Log.Write("render3d", e); car3D.Dispose(); car3D = null; return;
+            }
+        }
+        else (left, top) = DrawSprites(world, pet, w, h);
+        DrawEffects(world, effectWindow, unit, w, h, left, top);
+    }
+
+    (int Left, int Top) DrawSprites(World world, LayerWindow pet, int w, int h)
+    {
+        var pose = world.Pose; double scale = world.Scale;
         int left = (int)Math.Floor(pose.X - w / 2.0), top = (int)Math.Floor(pose.Y - h * .70);
         var frames = For(scale); float n = (float)(512 * scale);
         using (var g = Graphics.FromImage(pet.Canvas(w, h)))
@@ -46,7 +62,11 @@ internal sealed class Renderer(Sprites sprites) : IDisposable
             }
         }
         pet.Present(left, top);
+        return (left, top);
+    }
 
+    void DrawEffects(World world, LayerWindow effectWindow, double unit, int w, int h, int left, int top)
+    {
         // Nothing to show and the layer is already empty: skip the second window entirely.
         bool empty = world.CurrentRamp is null && world.Particles.Count == 0 && world.Streaks.Count == 0;
         if (empty && effectsClear) return;
@@ -108,5 +128,5 @@ internal sealed class Renderer(Sprites sprites) : IDisposable
     }).ToArray();
 
     static void Setup(Graphics g) { g.CompositingMode = CompositingMode.SourceOver; g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.Bilinear; g.PixelOffsetMode = PixelOffsetMode.Half; }
-    public void Dispose() { foreach (var c in cache) c.Dispose(); foreach (var p in puffs) p.Dispose(); }
+    public void Dispose() { foreach (var c in cache) c.Dispose(); foreach (var p in puffs) p.Dispose(); car3D?.Dispose(); }
 }
