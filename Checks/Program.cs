@@ -139,6 +139,38 @@ Assert(turn.Direction == -facing && squashed <= .1 && lowest < -5, "Turns with a
 
 Assert(bump.Impacts.Any(i => i.Metal) && wall.Impacts.Any(i => i.Metal), "Wall crashes queue a crash sound");
 
+var lift = new World(); lift.SetScreens([monitor]); lift.SetSurfaces([new(1, 200, 900, 500), taskbar]);
+Tick(lift, .3); var liftStart = lift.Pose;
+lift.Grab(liftStart.X, liftStart.Y); lift.Hold(true); lift.BeginDrag();
+for (int i = 1; i <= 120; i++) { lift.DragTo(liftStart.X + i * 3, liftStart.Y - i * 2); lift.Step(1.0 / 60); }
+Assert(lift.Dragging && lift.Hover == 0 && lift.Thrust == 0, "A car carried around keeps its wheels down");
+double holdX = liftStart.X + 360, holdY = liftStart.Y - 240;
+for (int i = 0; i < 100; i++) { lift.DragTo(holdX, holdY); lift.Step(1.0 / 60); AssertFinite(lift.Pose); }
+Assert(lift.Dragging && lift.Hover > .99 && lift.Thrust > .99 && lift.Pose.Sequence == "drive", "Held still in the air: wheels fold flat and the jets fire");
+lift.Hold(false); var floatStart = lift.Pose;
+Tick(lift, 1.5); var floating = lift.Pose;
+Assert(lift.Phase == Motion.Hover && Math.Abs(floating.X - floatStart.X) < 8 && Math.Abs(floating.Y - floatStart.Y) < 10, "Released in hover mode it levitates instead of falling");
+var hover3d = lift.State;
+Assert(!hover3d.Grounded && hover3d.Hover > .99 && hover3d.Thrust > .99 && double.IsFinite(hover3d.Ground + hover3d.Pitch),
+    "3D state of a hovering car: airborne, wheels folded, jets on");
+Assert(lift.Particles.Count > 0, "Jets leave exhaust");
+for (int i = 0; i < 120 * 30 && !(lift.SurfaceId is not null && lift.Hover == 0); i++) { lift.Step(1.0 / 120); AssertFinite(lift.Pose); }
+Assert(lift.SurfaceId is not null && lift.Hover == 0 && lift.Thrust == 0 && lift.Impacts.Any(x => !x.Metal), "After a while it descends on the jets, touches down and unfolds the wheels");
+Tick(lift, 2); Assert(lift.Phase is Motion.Drive or Motion.Turn or Motion.Jump or Motion.Land && lift.Velocity > 0 || lift.Phase == Motion.Turn, "Then it drives on");
+
+var glide = new World(); glide.SetScreens([monitor]); glide.SetSurfaces([taskbar]); Tick(glide, .2);
+var gs = glide.Pose; glide.Grab(gs.X, gs.Y); glide.Hold(true); glide.BeginDrag();
+for (int i = 0; i < 80; i++) { glide.DragTo(gs.X, gs.Y - 400); glide.Step(1.0 / 60); }
+for (int i = 1; i <= 8; i++) { glide.DragTo(gs.X + i * 30, gs.Y - 400); glide.Step(1.0 / 60); }
+glide.Hold(false); double glideY = glide.Pose.Y, glideX = glide.Pose.X; Tick(glide, .8);
+Assert(glide.Phase == Motion.Hover && glide.Pose.X > glideX + 100 && Math.Abs(glide.Pose.Y - glideY) < 25, "A hovering car thrown sideways glides level and slows down");
+
+var idle = new World(); idle.SetSurfaces(windows); Tick(idle, .5); idle.Paused = true;
+var shakes = new List<Pose>(); for (int i = 0; i < 60; i++) { idle.Step(1.0 / 120); shakes.Add(idle.Pose); }
+double restX = idle.X;
+Assert(shakes.Select(p => Math.Round(p.Y, 2)).Distinct().Count() > 10 && shakes.All(p => Math.Abs(p.Y - shakes[0].Y) < 3 && Math.Abs(p.X - restX) < 1) && idle.X == restX,
+    "Paused with the ignition on: the car shakes slightly in place");
+
 string root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../Assets"));
 
 using (var glb = File.OpenRead(Path.Combine(root, "car/porsche-930.glb")))
@@ -240,6 +272,14 @@ audio.Play(crashSound, 1, .9f); audio.Read(buffer, 0, buffer.Length);
 Assert(Rms(buffer) > .02, "Crash sound plays over a silent engine");
 for (int i = 0; i < 8; i++) audio.Read(buffer, 0, buffer.Length);
 Assert(buffer.All(x => x == 0), "Crash sound finishes and leaves silence");
+var jets = ImpactSound.HoverLoop();
+double seam = Math.Abs(jets.Samples[0] - jets.Samples[^2]);
+double typicalStep = Enumerable.Range(1, jets.Frames - 1).Select(i => (double)Math.Abs(jets.Samples[2 * i] - jets.Samples[2 * i - 2])).Max();
+Assert(jets.Channels == 2 && jets.Frames == 88200 && seam <= typicalStep, "Jet loop is two seconds long and loops without a click");
+var jetEngine = new EngineSamples(Pcm.Load(File.OpenRead(Path.Combine(root, "audio/v8-burnout-loop.wav"))), Pcm.Load(File.OpenRead(Path.Combine(root, "audio/v8-drive-loop.wav"))), jets);
+jetEngine.Set("hover", .45f); var jetRms = new List<double>();
+for (int i = 0; i < 50; i++) { jetEngine.Read(buffer, 0, buffer.Length); jetRms.Add(Rms(buffer)); }
+Assert(jetRms.Skip(2).Min() > .01, "Jets roar continuously while hovering");
 
 using var rsa = RSA.Create(3072); string publicKey = rsa.ExportSubjectPublicKeyInfoPem();
 string package = Path.Combine(Path.GetTempPath(), "touareg-update-test-" + Guid.NewGuid() + ".exe");
@@ -269,7 +309,7 @@ if (args.Length is 3 or 4)
 {
     var ownRelease = UpdateSecurity.Verify(File.ReadAllText(args[1]), File.ReadAllText(Path.Combine(root, "update-public.pem")), "0.0.0");
     UpdateSecurity.VerifyFile(args[0], ownRelease);
-    Assert(ownRelease.Version == (args.Length == 4 ? args[3] : "1.1.1"), "Verifies the actual delivered EXE using the pinned production key");
+    Assert(ownRelease.Version == (args.Length == 4 ? args[3] : "1.3.0"), "Verifies the actual delivered EXE using the pinned production key");
     using var assembly = new System.Reflection.PortableExecutable.PEReader(File.OpenRead(args[2]));
     var metadata = System.Reflection.Metadata.PEReaderExtensions.GetMetadataReader(assembly);
     var names = metadata.ManifestResources.Select(handle => metadata.GetString(metadata.GetManifestResource(handle).Name).Replace('\\', '/')).ToList();

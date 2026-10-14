@@ -47,8 +47,10 @@ internal sealed class Renderer(Sprites sprites, Renderer3D? car3D) : IDisposable
             transform.Scale((float)(pose.Direction * pose.Flip), 1, MatrixOrder.Append);
             transform.Translate((float)(pose.X - left), (float)(pose.Y - top), MatrixOrder.Append);
             g.Transform = transform;
-            g.DrawImage(frames.Frames[pose.Sequence][pose.Frame], new RectangleF((float)(-256 * scale), (float)(-410 * scale), n, n), new RectangleF(0, 0, n, n), GraphicsUnit.Pixel);
-            if (pose.Sequence == "drive" && world.Phase != Motion.Turn)
+            var body = new RectangleF((float)(-256 * scale), (float)(-410 * scale), n, n);
+            if (pose.Sequence == "drive" && world.Hover > 0) DrawHover(g, world, frames, pose.Frame, scale, body);
+            else g.DrawImage(frames.Frames[pose.Sequence][pose.Frame], body, new RectangleF(0, 0, n, n), GraphicsUnit.Pixel);
+            if (pose.Sequence == "drive" && world.Phase != Motion.Turn && world.Hover == 0)
             {
                 float r = (float)(31 * scale);
                 for (int i = 0; i < 2; i++)
@@ -94,6 +96,57 @@ internal sealed class Renderer(Sprites sprites, Renderer3D? car3D) : IDisposable
             }
         }
         effectWindow.Present(left, top); effectsClear = empty;
+    }
+
+    // Hover conversion: the wheels turn flat under the car (as on the time machine) and fire jets downwards.
+    void DrawHover(Graphics g, World world, Scaled frames, int frame, double scale, RectangleF body)
+    {
+        // The sprite's tyres reach ~44 px from the wheel centre (512 px frame).
+        float n = body.Width, r = (float)(44 * scale), well = (float)(47 * scale), fold = (float)world.Hover;
+        var wheels = sprites.Wheels[frame].Select(w => new PointF((float)((w.X - 256) * scale), (float)((w.Y - 410) * scale))).ToArray();
+        // Body without the wheels painted into the sprite.
+        using (var outside = new Region(body))
+        {
+            foreach (var w in wheels) { using var disc = new GraphicsPath(); disc.AddEllipse(w.X - well, w.Y - well, 2 * well, 2 * well); outside.Exclude(disc); }
+            var save = g.Save(); g.SetClip(outside, CombineMode.Intersect);
+            g.DrawImage(frames.Frames["drive"][frame], body, new RectangleF(0, 0, n, n), GraphicsUnit.Pixel);
+            g.Restore(save);
+        }
+        using var arch = new SolidBrush(Color.FromArgb(255, 18, 18, 20));
+        float squash = 1 - .76f * fold, drop = (float)(9 * scale) * fold;
+        for (int i = 0; i < wheels.Length; i++)
+        {
+            var w = wheels[i]; var src = sprites.Wheels[0][i];
+            // Dark wheel arch above the folded wheel.
+            g.FillPie(arch, w.X - well, w.Y - well, 2 * well, 2 * well, 180, 180);
+            var save = g.Save();
+            g.TranslateTransform(w.X, w.Y + drop); g.ScaleTransform(1, squash);
+            using (var clip = new GraphicsPath()) { clip.AddEllipse(-r, -r, 2 * r, 2 * r); g.SetClip(clip, CombineMode.Intersect); }
+            g.DrawImage(frames.Frames["drive"][0], new RectangleF(-r, -r, 2 * r, 2 * r), new RectangleF((float)(src.X * scale) - r, (float)(src.Y * scale) - r, 2 * r, 2 * r), GraphicsUnit.Pixel);
+            g.Restore(save);
+            if (world.Thrust > 0) Flame(g, w.X, w.Y + drop + r * squash, (float)scale, (float)world.Thrust, world.Age * 37 + i * 2.1);
+        }
+    }
+
+    static void Flame(Graphics g, float x, float top, float scale, float thrust, double t)
+    {
+        float length = (float)((130 + 22 * Math.Sin(t) + 12 * Math.Sin(t * 1.7 + 1)) * scale * thrust), width = 46 * scale * (.6f + .4f * thrust);
+        if (length < 2) return;
+        // Outer flame, then a hot core, then the glow at the nozzle.
+        Tongue(g, x, top, width, length, Color.FromArgb(235, 255, 150, 30), Color.FromArgb(0, 230, 40, 0));
+        Tongue(g, x, top, width * .5f, length * .62f, Color.FromArgb(255, 255, 250, 210), Color.FromArgb(0, 255, 200, 60));
+        using var glow = new SolidBrush(Color.FromArgb((int)(170 * thrust), 255, 235, 160));
+        g.FillEllipse(glow, x - width * .55f, top - 5 * scale, width * 1.1f, 10 * scale);
+    }
+
+    static void Tongue(Graphics g, float x, float top, float width, float length, Color hot, Color cold)
+    {
+        using var path = new GraphicsPath();
+        path.AddBezier(x - width / 2, top, x - width / 2, top + length * .45f, x - width * .08f, top + length * .8f, x, top + length);
+        path.AddBezier(x, top + length, x + width * .08f, top + length * .8f, x + width / 2, top + length * .45f, x + width / 2, top);
+        path.CloseFigure();
+        using var brush = new LinearGradientBrush(new PointF(x, top - 1), new PointF(x, top + length + 1), hot, cold);
+        g.FillPath(brush, path);
     }
 
     Scaled For(double scale)

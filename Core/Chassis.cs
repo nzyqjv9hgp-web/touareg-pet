@@ -78,7 +78,7 @@ public sealed class Chassis(double wheelbase, double wheelRadius)
         // Tyres roll with the ground; in the air they keep turning and slowly lose speed.
         double roll = forward * dt / wheelRadius;
         if (s.Grounded) { frontSpin += roll; rearSpin += roll; }
-        else { frontSpin += roll * .6; rearSpin += roll * .6; }
+        else if (s.Hover == 0) { frontSpin += roll * .6; rearSpin += roll * .6; }   // folded wheels do not roll
         if (burnout) rearSpin += (wheelSpin - lastWheelSpin) * 1.3;
         if (turning) { rearSpin += 34 * turn * dt; frontSpin += 3 * turn * dt; }
         double steerTarget = turning ? Math.Sign(yawRate) * 30 * Math.Min(1, turn * 2.2) : 0;

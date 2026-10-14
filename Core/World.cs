@@ -7,13 +7,15 @@ public record Area(double Left, double Top, double Right, double Bottom, double 
 public record Pose(string Sequence, int Frame, double X, double Y, double Angle, int Direction, double Flip);
 // The car for the 3D renderer: Ground is the line the tyres sit on (or would, while airborne), Pitch is the body's
 // nose-up angle in degrees, Yaw 0 faces screen right and 180 faces left (90: the tail turned towards the viewer).
-public readonly record struct CarState(double X, double Ground, bool Grounded, double Pitch, double Yaw, double Speed, Motion Phase, double PhaseTime);
+// Hover is the wheel fold (0 down, 1 flat) and Thrust the jets under them.
+public readonly record struct CarState(double X, double Ground, bool Grounded, double Pitch, double Yaw, double Speed, Motion Phase, double PhaseTime,
+    double Hover = 0, double Thrust = 0);
 public record Ramp(double X, double Y, double Width, double Height, int Direction);
 public sealed record Particle(double X, double Y, double Vx, double Vy, double Radius, double Age, double Life);
 public sealed record Streak(double X, double Y, int Direction, double Age, double Length);
 // A bump worth hearing: Strength 0..1, Metal for wall hits, otherwise a landing thud.
 public sealed record Impact(double Strength, bool Metal);
-public enum Motion { Drive, Burnout, Jump, Land, Turn, Drag, Fall, Crash }
+public enum Motion { Drive, Burnout, Jump, Land, Turn, Drag, Fall, Crash, Hover }
 
 public sealed class World
 {
@@ -25,7 +27,7 @@ public sealed class World
     static readonly double[] LandContact = [68, 68, 49, 49, 46, 47];
     static readonly double[] TiltContact = [89, 49, 47, 65, 84, 45];
     static readonly int[] CrashFrames = [4, 4, 3, 1, 0, 2];
-    const double Contact = 47, CrashTime = .7, TurnTime = .9, HoldDelay = .15;
+    const double Contact = 47, CrashTime = .7, TurnTime = .9, HoldDelay = .15, HoverDelay = 1, HoverHold = 3;
     readonly Random random = new(42);
     List<Surface> surfaces = [];
     List<Area> screens = [];
@@ -35,15 +37,19 @@ public sealed class World
     double sx, sy, tx, ty, flightTime, startV, endV, arc;
     double rememberedLeft, dpi = 96;
     double fy, vx, vy, grabX, grabY, cursorX, cursorY, swing, swingV, airTime, shake, bounce, hopTimer = 2;
-    double driveClock, holdTime, rampGrow;
+    double driveClock, holdTime, rampGrow, hover, thrust, still, idleClock;
     Ramp? lastRamp;
-    bool driveOff, bounced, turnPuffed;
+    bool driveOff, bounced, turnPuffed, hoverOn;
     public double X { get; private set; }
     public double Velocity { get; private set; }
     public int Direction { get; private set; } = 1;
     public Motion Phase { get; private set; } = Motion.Drive;
     public bool Held { get; private set; }
     public bool Dragging => Phase == Motion.Drag;
+    // Hover conversion: 0 = wheels down, 1 = wheels folded flat. Thrust drives the jets under them.
+    public double Hover => hover;
+    public double Thrust => thrust;
+    public double Age => age;
     public bool EngineArmed { get; private set; }
     public bool Paused { get; set; }
     public double CarWidth { get; set; } = 194;
@@ -89,7 +95,7 @@ public sealed class World
     public void SetSurfaces(IEnumerable<Surface> input)
     {
         surfaces = input.Where(s => s.Right - s.Left >= CarWidth * s.Dpi / 96 + 24 * s.Dpi / 96).ToList();
-        if (Phase is Motion.Drag or Motion.Fall) return;
+        if (Phase is Motion.Drag or Motion.Fall or Motion.Hover) return;
         if (surface is null) { Reset(); return; }
         if (Phase == Motion.Jump)
         {
@@ -123,6 +129,7 @@ public sealed class World
         var start = surfaces.FirstOrDefault(s => !s.Floor) ?? surfaces.FirstOrDefault();
         surface = null; target = null; hop = null; Phase = Motion.Drive; phaseAge = 0; Velocity = 0; Direction = 1;
         Held = false; EngineArmed = false; boost = 0; charge = 0; shake = 0; rampGrow = 0; lastRamp = null;
+        hoverOn = false; hover = thrust = 0;
         Particles.Clear(); Streaks.Clear(); Impacts.Clear();
         if (start is not null)
         {
@@ -158,7 +165,9 @@ public sealed class World
     public void BeginDrag()
     {
         if (!Held || Paused || Phase == Motion.Drag) return;
-        var p = Pose; X = p.X; fy = p.Y;
+        // A floating car stays in hover mode when it is picked up again.
+        if (Phase != Motion.Hover) hoverOn = false;
+        var p = Pose; X = p.X; fy = p.Y; still = 0;
         surface = null; target = null; hop = null;
         Phase = Motion.Drag; phaseAge = 0; vx = vy = 0; swing = swingV = 0; pending = false;
         Velocity = 0; boost = 0; charge = 0; EngineArmed = false;
@@ -168,9 +177,11 @@ public sealed class World
 
     void Throw()
     {
-        vx = Math.Clamp(vx, -3200 * Unit, 3200 * Unit); vy = Math.Clamp(vy, -3200 * Unit, 3200 * Unit);
+        double limit = (hoverOn ? 1500 : 3200) * Unit;
+        vx = Math.Clamp(vx, -limit, limit); vy = Math.Clamp(vy, -limit, limit);
         if (Math.Abs(vx) > 60 * Unit) Direction = Math.Sign(vx);
-        Phase = Motion.Fall; phaseAge = 0; airTime = 0; bounced = false;
+        // With the wheels folded the car keeps flying on its jets instead of falling.
+        Phase = hoverOn ? Motion.Hover : Motion.Fall; phaseAge = 0; airTime = 0; bounced = false;
     }
 
     // Leave the current support and continue ballistically from the present pose.
@@ -306,13 +317,33 @@ public sealed class World
             sy + (ty - sy) * p - arc * 4 * p * (1 - p), p);
     }
 
-    public Pose Pose
+    public Pose Pose => Paused ? Idle(RawPose) : RawPose;
+
+    // Paused with the ignition on: a light engine shake around the resting pose.
+    Pose Idle(Pose p)
+    {
+        double t = idleClock, k = Unit;
+        return p with
+        {
+            X = p.X + Math.Sin(t * 2 * Math.PI * 9.3) * .3 * k,
+            Y = p.Y + (Math.Sin(t * 2 * Math.PI * 13) * .7 + Math.Sin(t * 2 * Math.PI * 21.7) * .35) * k,
+            Angle = p.Angle + Math.Sin(t * 2 * Math.PI * 7.1) * .2,
+        };
+    }
+
+    double Bob => Math.Sin(age * 2 * Math.PI * 1.1) * 4 * Unit * hover;
+
+    Pose RawPose
     {
         get
         {
             double jolt = shake > 0 ? Math.Sin(age * 80) * 6 * Unit * shake / .3 : 0;
+            if (Phase == Motion.Drag && hover > 0)
+                return new("drive", 0, X, fy + Bob, Direction * swing, Direction, 1);
             if (Phase == Motion.Drag)
                 return new("jump", 3, X, fy, Direction * swing - JumpPitch[3], Direction, 1);
+            if (Phase == Motion.Hover)
+                return new("drive", 0, X + jolt, fy + Bob, Direction * swing, Direction, 1);
             if (Phase == Motion.Fall)
             {
                 int i = vy < -250 * Unit ? 1 : vy < 250 * Unit ? 3 : 4;
@@ -373,12 +404,31 @@ public sealed class World
     {
         get
         {
+            var s = RawState with { Hover = hover, Thrust = thrust };
+            if (!Paused) return s;
+            // Paused with the ignition on: the same light engine shake as the sprite pose.
+            double t = idleClock, k = Unit;
+            return s with
+            {
+                X = s.X + Math.Sin(t * 2 * Math.PI * 9.3) * .3 * k,
+                Ground = s.Ground + (Math.Sin(t * 2 * Math.PI * 13) * .7 + Math.Sin(t * 2 * Math.PI * 21.7) * .35) * k,
+                Pitch = s.Pitch - Math.Sin(t * 2 * Math.PI * 7.1) * .2,
+            };
+        }
+    }
+
+    CarState RawState
+    {
+        get
+        {
             double jolt = shake > 0 ? Math.Sin(age * 80) * 6 * Unit * shake / .3 : 0;
             double facing = Direction > 0 ? 0 : 180, contact = Contact * Scale;
             switch (Phase)
             {
                 case Motion.Drag:
-                    return new(X, fy + contact, false, -Direction * swing, facing, vx, Phase, phaseAge);
+                    return new(X, fy + (hover > 0 ? Bob : 0) + contact, false, -Direction * swing, facing, vx, Phase, phaseAge);
+                case Motion.Hover:
+                    return new(X + jolt, fy + Bob + contact, false, -Direction * swing, facing, vx, Phase, phaseAge);
                 case Motion.Fall:
                     double pitch = Math.Clamp(Math.Atan2(vy, Math.Abs(vx) + 400 * Unit) * 180 / Math.PI * .6, -28, 28);
                     return new(X + jolt, fy + contact, false, -pitch, facing, vx, Phase, phaseAge);
@@ -417,11 +467,12 @@ public sealed class World
 
     public void Step(double seconds)
     {
-        if (Paused || (surface is null && Phase is not (Motion.Drag or Motion.Fall))) return;
+        if (Paused) { idleClock += Math.Min(seconds, .25); return; }
+        if (surface is null && Phase is not (Motion.Drag or Motion.Fall or Motion.Hover)) return;
         for (double remaining = Math.Min(seconds, .25); remaining > .000001;)
         {
             double dt = Math.Min(remaining, 1.0 / 120); remaining -= dt; Tick(dt);
-            if (surface is null && Phase is not (Motion.Drag or Motion.Fall)) return;
+            if (surface is null && Phase is not (Motion.Drag or Motion.Fall or Motion.Hover)) return;
         }
     }
 
@@ -458,8 +509,17 @@ public sealed class World
             lastRamp = full; rampGrow = Math.Min(1, rampGrow + dt / .28);
         }
         else if ((rampGrow = Math.Max(0, rampGrow - dt / .3)) == 0) lastRamp = null;
+        hover = Approach(hover, hoverOn ? 1 : 0, dt / .45);
+        thrust = Approach(thrust, hoverOn && hover > .3 ? 1 : 0, dt / .25);
+        if (thrust > 0 && Phase is Motion.Drag or Motion.Hover)
+        {
+            // Exhaust from the jets drifts up behind the car.
+            smokeClock += dt * 9 * thrust;
+            while (smokeClock >= 1) { smokeClock--; Puff(X + (random.Next(2) * 2 - 1) * 133 * Scale, fy + Bob + 70 * Scale, true); }
+        }
         if (Phase == Motion.Drag) { DragTick(dt); return; }
         if (Phase == Motion.Fall) { FallTick(dt); return; }
+        if (Phase == Motion.Hover) { HoverTick(dt); return; }
         if (Phase == Motion.Burnout)
         {
             charge = Math.Clamp(phaseAge / 1.8, 0, 1); WheelSpin += dt * (24 + charge * 10);
@@ -522,6 +582,8 @@ public sealed class World
 
     void DriveTick(double dt)
     {
+        // Wheels still unfolding after a hover landing.
+        if (hover > 0) { Velocity = 0; return; }
         var s = surface!;
         double edge = Direction > 0 ? s.Right : s.Left;
         if (Direction * (X - edge) > 0)
@@ -577,11 +639,46 @@ public sealed class World
         double nx = cursorX - grabX, ny = cursorY - grabY, k = Math.Min(1, dt * 14);
         vx += ((nx - X) / dt - vx) * k; vy += ((ny - fy) / dt - vy) * k;
         X = nx; fy = ny;
+        // Held still for a moment: the wheels fold and the jets light up.
+        if (!hoverOn)
+        {
+            still = Math.Abs(vx) + Math.Abs(vy) < 60 * Unit ? still + dt : 0;
+            if (still >= HoverDelay) hoverOn = true;
+        }
         if (screens.Count > 0 && ScreenAt(X, fy) is { } screen) dpi = screen.Dpi;
         // The car dangles from the cursor and swings against the direction of motion.
         double want = Math.Clamp(-vx * .012 / Unit, -24, 24);
         swingV += ((want - swing) * 90 - swingV * 9) * dt; swing += swingV * dt;
         WheelSpin += dt * 2;
+    }
+
+    void HoverTick(double dt)
+    {
+        // Air brakes on the jets, then after a while a slow powered descent.
+        double damping = Math.Exp(-dt * 1.8);
+        vx *= damping; vy *= damping;
+        if (phaseAge > HoverHold) vy = Approach(vy, 85 * Unit, 220 * Unit * dt);
+        double before = fy + Contact * Scale;
+        X += vx * dt; fy += vy * dt;
+        Walls();
+        if (screens.Count > 0 && ScreenAt(X, fy) is { } screen) dpi = screen.Dpi;
+        double want = Math.Clamp(-vx * .012 / Unit, -14, 14);
+        swingV += ((want - swing) * 60 - swingV * 8) * dt; swing += swingV * dt;
+        double bottom = fy + Contact * Scale;
+        if (vy > 0)
+        {
+            var pad = surfaces.Where(s => X >= s.Left && X <= s.Right && s.Y >= before - .5 && s.Y <= bottom).OrderBy(s => s.Y).FirstOrDefault()
+                ?? surfaces.Where(s => s.Floor && X >= s.Left - 24 && X <= s.Right + 24 && bottom > s.Y + 40 * Unit).OrderBy(s => s.Y).FirstOrDefault();
+            if (pad is not null)
+            {
+                // Touchdown: the jets cut out and the wheels unfold before it drives off.
+                Attach(pad); X = Math.Clamp(X, pad.Left, pad.Right); Velocity = 0; hoverOn = false; swing = swingV = 0;
+                Phase = Motion.Drive; phaseAge = 0; Decide(); Bang(.25, false);
+                for (int i = 0; i < 10; i++) Puff(X + (random.NextDouble() - .5) * 2 * Half, pad.Y - 3 * Unit, true);
+                return;
+            }
+        }
+        if (phaseAge > 30) Reset();
     }
 
     void FallTick(double dt)

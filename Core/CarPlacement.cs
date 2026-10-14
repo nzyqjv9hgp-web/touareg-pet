@@ -32,9 +32,12 @@ public sealed class CarPlacement
         for (int i = 0; i < wheels.Length; i++)
         {
             bool front = CarModel.IsFront(i);
-            // Spin about the axle (glTF x), then steer about the vertical, then out to the wheel's place.
+            // Spin about the axle (glTF x), steer about the vertical, fold flat for hovering (about the car's length,
+            // outer face down, like the time machine), then out to the wheel's place.
+            float fold = (model.Wheels[i].Origin.X > 0 ? -1 : 1) * MathF.PI / 2 * (float)s.Hover;
             wheels[i] = Matrix4x4.CreateRotationX((float)(front ? b.FrontSpin : b.RearSpin))
                 * (front ? Matrix4x4.CreateRotationY((float)b.Steer * rad) : Matrix4x4.Identity)
+                * Matrix4x4.CreateRotationZ(fold)
                 * Matrix4x4.CreateTranslation(model.Wheels[i].Origin) * toCar * unsprung;
         }
         return new CarPlacement { Sprung = sprung, Unsprung = unsprung, Wheels = wheels, Left = left, Top = top };

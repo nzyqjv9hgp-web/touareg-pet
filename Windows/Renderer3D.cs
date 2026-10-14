@@ -36,7 +36,7 @@ internal sealed class Renderer3D : IDisposable
     readonly ID3D11RasterizerState rasterizer;
     readonly ID3D11BlendState opaque, premultiplied;
     readonly ID3D11DepthStencilState depthWrite, depthRead;
-    readonly Mesh body, glass, shadow;
+    readonly Mesh body, glass, shadow, flame;
     readonly Mesh[] wheels;
     readonly uint samples;
     ID3D11Texture2D? color, depth, resolved, staging;
@@ -102,6 +102,10 @@ internal sealed class Renderer3D : IDisposable
         float y = -model.WheelRadius + .005f, f = model.Front + .25f, r = model.Rear - .25f;
         shadow = Upload(new MeshPart("shadow", Vector3.Zero,
             [r, y, -1.3f, 0, 1, 0, 0, 0,  f, y, -1.3f, 0, 1, 0, 1, 0,  f, y, 1.3f, 0, 1, 0, 1, 1,  r, y, 1.3f, 0, 1, 0, 0, 1],
+            [0, 1, 2, 0, 2, 3], [new(0, 6, MaterialKind.Body)]));
+        // A jet flame: a unit quad hanging down from its origin, drawn straight in canvas space under a folded wheel.
+        flame = Upload(new MeshPart("flame", Vector3.Zero,
+            [-.5f, 0, 0, 0, 0, 1, 0, 0,  .5f, 0, 0, 0, 0, 1, 1, 0,  .5f, -1, 0, 0, 0, 1, 1, 1,  -.5f, -1, 0, 0, 0, 1, 0, 1],
             [0, 1, 2, 0, 2, 3], [new(0, 6, MaterialKind.Body)]));
     }
 
@@ -192,6 +196,17 @@ internal sealed class Renderer3D : IDisposable
         for (int i = 0; i < wheels.Length; i++) Draw(wheels[i], place.Wheels[i], 0, 1);
         context.OMSetBlendState(premultiplied); context.OMSetDepthStencilState(depthRead);
         Draw(glass, place.Sprung, 2, .55f);
+        if (s.Thrust > .01)
+        {
+            // Jets under the folded wheels: they hang straight down, near ones in front of the body, far ones behind.
+            double ppu = CarPlacement.PixelsPerUnit(model, world.Scale);
+            float width = (float)(.5 * ppu), length = (float)(.8 * ppu * s.Thrust);
+            foreach (var wheel in place.Wheels)
+            {
+                var at = Vector3.Transform(Vector3.Zero, wheel);
+                Draw(flame, Matrix4x4.CreateScale(width, length, 1) * Matrix4x4.CreateTranslation(at.X, at.Y, at.Z + 1), 4, (float)s.Thrust, (float)world.Age);
+            }
+        }
 
         context.ResolveSubresource(resolved!, 0, color!, 0, Format.B8G8R8A8_UNorm);
         context.CopyResource(staging!, resolved!);
@@ -211,14 +226,14 @@ internal sealed class Renderer3D : IDisposable
         return (left, top);
     }
 
-    void Draw(Mesh mesh, Matrix4x4 world, float kind, float alpha)
+    void Draw(Mesh mesh, Matrix4x4 world, float kind, float alpha, float time = 0)
     {
         context.IASetVertexBuffer(0, mesh.Vertices, MeshPart.Stride * 4);
         context.IASetIndexBuffer(mesh.Indices, Format.R32_UInt, 0);
         foreach (var range in mesh.Part.Ranges)
         {
             float k = kind == 0 && range.Material == MaterialKind.Paint ? 1 : kind;
-            var data = new ObjectData { World = world, Params = new(k, alpha, 0, 0) };
+            var data = new ObjectData { World = world, Params = new(k, alpha, time, 0) };
             context.UpdateSubresource(in data, objectBuffer);
             context.DrawIndexed((uint)range.Count, (uint)range.Start, 0);
         }
@@ -272,6 +287,17 @@ internal sealed class Renderer3D : IDisposable
         float4 PS(VOut i) : SV_Target
         {
             float kind = Params.x;
+            if (kind > 3.5)
+            {
+                // Jet flame: white-hot core, blue edges, tapering and flickering towards the tip.
+                float across = abs(i.uv.x * 2 - 1), along = i.uv.y;
+                float flicker = 0.82 + 0.18 * sin(Params.z * 57 + along * 11) * sin(Params.z * 31 + 1.7);
+                float shape = saturate(1 - across / max(0.05, 1 - along * 0.8)) * pow(saturate(1 - along), 1.3);
+                float core = saturate(1 - across * 2.4) * saturate(1 - along * 1.7);
+                float a = shape * flicker * Params.y;
+                float3 c = lerp(float3(0.30, 0.62, 1.0), float3(1.0, 1.0, 1.0), core);
+                return float4(c * a, a * 0.8);
+            }
             if (kind > 2.5)
             {
                 float2 q = i.uv * 2 - 1;

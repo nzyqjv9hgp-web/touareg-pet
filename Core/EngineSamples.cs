@@ -28,7 +28,7 @@ public sealed record Pcm(float[] Samples, int Rate, int Channels)
 }
 
 // Real recordings at their original pitch; the driving prefix plays once, then the loaded-RPM tail loops.
-public sealed class EngineSamples(Pcm burnout, Pcm drive)
+public sealed class EngineSamples(Pcm burnout, Pcm drive, Pcm? hover = null)
 {
     sealed class Voice(Pcm pcm, bool driving)
     {
@@ -69,7 +69,13 @@ public sealed class EngineSamples(Pcm burnout, Pcm drive)
             desiredGain = Math.Clamp(volume, 0, 1) * .85f;
             if (next == mode) return;
             retiring = current; mode = next;
-            current = next == "drive" ? new(drive, true) : next == "burnout" ? new(burnout, false) : null;
+            current = next switch
+            {
+                "drive" => new(drive, true),
+                "burnout" => new(burnout, false),
+                "hover" when hover is not null => new(hover, false),
+                _ => null,
+            };
         }
     }
     // Mono one-shot mixed over the engine on both channels, e.g. a crash or a landing.

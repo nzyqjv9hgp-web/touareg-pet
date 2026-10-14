@@ -60,6 +60,33 @@ public static class ImpactSound
     static float[] Tap() => Make(.25, .6f, 29, (t, n) =>
         Thump(t, 75, 40, 30, 22) * .8 + n.High(.6) * .5 * Math.Exp(-t * 70));
 
+    // Seamless 2-second loop for the hover jets: roaring burn, low hum and crackle.
+    public static Pcm HoverLoop()
+    {
+        const double loop = 2, fade = .5;
+        var n = new Noise(57); var random = new Random(91);
+        int total = (int)(Rate * (loop + fade)), length = (int)(Rate * loop), overlap = (int)(Rate * fade);
+        double[] raw = new double[total]; double crackle = 0;
+        for (int i = 0; i < total; i++)
+        {
+            double t = (double)i / Rate; n.Next();
+            double low = n.Low(.04), mid = n.Low(.35) - low;
+            if (random.NextDouble() < .0009) crackle = .6 + random.NextDouble() * .4;
+            crackle *= .992;
+            double wobble = 1 + .03 * Math.Sin(2 * Math.PI * .7 * t);
+            raw[i] = low * 2.2 + mid * .9 + Math.Sin(2 * Math.PI * 62 * wobble * t) * .22 + Math.Sin(2 * Math.PI * 124 * wobble * t) * .08
+                + crackle * (random.NextDouble() * 2 - 1);
+        }
+        // Crossfade the tail into the head so the loop has no seam.
+        double[] mono = new double[length];
+        for (int i = 0; i < length; i++)
+            mono[i] = i < overlap ? raw[i] * ((double)i / overlap) + raw[i + length] * (1 - (double)i / overlap) : raw[i];
+        double peak = mono.Max(Math.Abs);
+        float[] stereo = new float[length * 2];
+        for (int i = 0; i < length; i++) stereo[2 * i] = stereo[2 * i + 1] = (float)(mono[i] / peak * .8);
+        return new(stereo, Rate, 2);
+    }
+
     static double Thump(double t, double baseHz, double dropHz, double sweep, double decay)
     {
         // Closed form of a sine whose frequency falls from base+drop to base.

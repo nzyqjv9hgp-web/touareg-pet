@@ -142,6 +142,38 @@ Start-Sleep -Seconds 3
 Shot "05-after-click"
 if ($process.HasExited) { Fail "The pet crashed (exit code $($process.ExitCode))" } else { Pass "Still running after drag, throw and click" }
 
+# Hover: pick the car up, hold it still in the air, let go and watch it levitate and come back down.
+$grab = $null
+for ($attempt = 0; $attempt -lt 30 -and -not $grab; $attempt++)
+{
+    $c = Car $pet
+    foreach ($dy in -45, -30, -60) { foreach ($ox in 0, -25, 25) { if (-not $grab -and [Win]::At($c.X + $ox, $c.Y + $dy) -eq $pet) { $grab = @{ X = ($c.X + $ox); Y = ($c.Y + $dy) } } } }
+    if (-not $grab) { Start-Sleep -Milliseconds 100 }
+}
+if (-not $grab) { Fail "Could not grab the car for the hover test" }
+else
+{
+    [Win]::SetCursorPos($grab.X, $grab.Y) | Out-Null; Start-Sleep -Milliseconds 30
+    [Win]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)
+    $hx = [int]([math]::Max(300, [math]::Min(700, $grab.X))); $hy = 330
+    for ($i = 1; $i -le 30; $i++) { [Win]::SetCursorPos([int]($grab.X + ($hx - $grab.X) * $i / 30), [int]($grab.Y + ($hy - $grab.Y) * $i / 30)) | Out-Null; Start-Sleep -Milliseconds 16 }
+    Start-Sleep -Milliseconds 2200
+    Shot "06-hover-held"
+    [Win]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)
+    $held = Car $pet
+    Start-Sleep -Milliseconds 1500
+    $floating = Car $pet
+    Shot "07-hover-floating"
+    Write-Host "Hover: released at ($($held.X),$($held.Y)), 1.5 s later ($($floating.X),$($floating.Y))"
+    if ([math]::Abs($floating.Y - $held.Y) -le 40) { Pass "Car levitates after being held still" } else { Fail "Car did not levitate: moved from $($held.Y) to $($floating.Y)" }
+    $wa = $screen.WorkingArea; $landed = $false
+    for ($i = 0; $i -lt 150 -and -not $landed; $i++) { Start-Sleep -Milliseconds 100; $c = Car $pet; if ($c.Y -ge $wa.Bottom - 40) { $landed = $true } }
+    Start-Sleep -Milliseconds 700
+    Shot "08-hover-landed"
+    if ($landed) { Pass "Hovering car descends and lands" } else { Fail "Hovering car did not come down within 15 s" }
+}
+if ($process.HasExited) { Fail "The pet crashed during the hover test" }
+
 # Web page blocks: open a local page in Edge and see whether the car gets onto one of its blocks.
 $page = (Resolve-Path (Join-Path $PSScriptRoot "smoke-page.html")).Path
 $edge = Get-Command msedge -ErrorAction SilentlyContinue
@@ -150,15 +182,15 @@ if (Test-Path $edgePath)
 {
     $browser = Start-Process -FilePath $edgePath -ArgumentList "--new-window", "--start-maximized", "--no-first-run", "--no-default-browser-check", "--user-data-dir=$env:RUNNER_TEMP\edge-smoke", "file:///$($page -replace '\\','/')" -PassThru
     Start-Sleep -Seconds 6
-    Shot "06-browser"
+    Shot "09-browser"
     $floor = $wa.Bottom; $onPage = 0; $samples = @()
     for ($i = 0; $i -lt 60; $i++)
     {
         Start-Sleep -Milliseconds 500; $c = Car $pet; $samples += "($($c.X),$($c.Y))"
         # Above the taskbar and not at the very top: riding (or jumping between) blocks of the page.
         if ($c.Y -lt $floor - 60 -and $c.Y -gt $wa.Top + 120) { $onPage++ }
-        if ($i -eq 20) { Shot "07-page" }
-        if ($i -eq 40) { Shot "08-page" }
+        if ($i -eq 20) { Shot "10-page" }
+        if ($i -eq 40) { Shot "11-page" }
     }
     Write-Host ("Car on the page: " + ($samples -join " "))
     if ($onPage -ge 4) { Pass "Car drives on web page blocks in the browser ($onPage of 60 samples)" }
