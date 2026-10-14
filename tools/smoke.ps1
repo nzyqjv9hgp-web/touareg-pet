@@ -199,6 +199,16 @@ if (Test-Path $edgePath)
 }
 else { Write-Host "Edge not found, page check skipped" }
 
+# Quarter-pipes: watch the car on the taskbar; near a screen edge and well above the taskbar means it is riding one.
+$seen = 0; $shots = 0
+for ($i = 0; $i -lt 120 -and $shots -lt 3; $i++)
+{
+    Start-Sleep -Milliseconds 250; $c = Car $pet
+    $nearWall = $c.X -lt $wa.Left + 420 -or $c.X -gt $wa.Right - 420
+    if ($nearWall -and $c.Y -lt $wa.Bottom - 160 -and $c.Y -gt $wa.Top) { $seen++; if ($seen % 3 -eq 1) { $shots++; Shot "1$(1 + $shots)-pipe" } }
+}
+if ($seen -gt 0) { Pass "Car rides a quarter-pipe at the screen edge ($seen samples)" } else { Write-Host "INFO no quarter-pipe ride seen in 30 s (it is random)" }
+
 $log = Join-Path $env:LOCALAPPDATA "TouaregPet\diagnostics.log"
 if (Test-Path $log) { Copy-Item $log "$Out/diagnostics.log"; $text = Get-Content $log -Raw; Write-Host "diagnostics.log:"; Write-Host $text
     if ($text -match " (UI|startup|scan): ") { Fail "Errors in diagnostics.log" }

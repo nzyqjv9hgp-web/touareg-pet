@@ -17,9 +17,10 @@ internal sealed class Renderer(Sprites sprites, Renderer3D? car3D) : IDisposable
     readonly Bitmap[] puffs = Puffs();
     bool effectsClear;
 
-    internal void Draw(World world, LayerWindow pet, LayerWindow effectWindow, double dt)
+    internal void Draw(World world, LayerWindow pet, LayerWindow effectWindow, LayerWindow pipeWindow, double dt)
     {
         double unit = world.Scale / (194.0 / 440);
+        DrawPipe(world, pipeWindow, pet, unit);
         int w = (int)Math.Ceiling(590 * unit), h = (int)Math.Ceiling(420 * unit), left, top;
         if (car3D is not null)
         {
@@ -96,6 +97,47 @@ internal sealed class Renderer(Sprites sprites, Renderer3D? car3D) : IDisposable
             }
         }
         effectWindow.Present(left, top); effectsClear = empty;
+    }
+
+    // The quarter-pipe stands against the wall in its own click-through window: the car flies far above its own canvas.
+    void DrawPipe(World world, LayerWindow window, LayerWindow pet, double unit)
+    {
+        if (world.CurrentPipe is not { } pipe)
+        {
+            if (window.Visible) window.Hide();
+            return;
+        }
+        double r = pipe.Radius, pad = 8 * unit, cx = pipe.Wall - pipe.Side * r, cy = pipe.Floor - r;
+        int left = (int)Math.Floor(pipe.Side > 0 ? pipe.Wall - r - pad : pipe.Wall - pad), top = (int)Math.Floor(cy - pad);
+        int w = (int)Math.Ceiling(r + 2 * pad), h = (int)Math.Ceiling(r + 2 * pad);
+        using (var g = Graphics.FromImage(window.Canvas(w, h)))
+        {
+            Setup(g); g.Clear(Color.Transparent); g.TranslateTransform(-left, -top);
+            // Profile: the curved riding surface from the floor up to the lip, then down the wall.
+            var arc = Enumerable.Range(0, 25).Select(i => Math.PI / 2 * i / 24)
+                .Select(t => new PointF((float)(cx + pipe.Side * r * Math.Sin(t)), (float)(cy + r * Math.Cos(t)))).ToArray();
+            using var path = new GraphicsPath(); path.AddPolygon([.. arc, new((float)pipe.Wall, (float)pipe.Floor)]);
+            using var fill = new LinearGradientBrush(new PointF(0, (float)cy - 1), new PointF(0, (float)pipe.Floor + 1),
+                Color.FromArgb(235, 176, 120, 66), Color.FromArgb(235, 112, 70, 34));
+            g.FillPath(fill, path);
+            using var support = new Pen(Color.FromArgb(200, 76, 48, 25), (float)(2 * unit));
+            for (int i = 1; i < 4; i++)
+            {
+                double x = pipe.Wall - pipe.Side * r * i / 4, y = cy + Math.Sqrt(Math.Max(0, r * r - (x - cx) * (x - cx)));
+                g.DrawLine(support, (float)x, (float)y, (float)x, (float)pipe.Floor);
+            }
+            using var surface = new Pen(Color.FromArgb(255, 243, 196, 121), (float)(3 * unit)); g.DrawLines(surface, arc);
+            // Steel coping on the lip.
+            float c = (float)(4 * unit);
+            using var coping = new SolidBrush(Color.FromArgb(255, 205, 210, 218));
+            g.FillEllipse(coping, (float)(pipe.Wall - pipe.Side * c) - c, (float)cy - c, 2 * c, 2 * c);
+        }
+        window.Present(left, top);
+        if (!window.Visible)
+        {
+            window.Show();
+            Native.SetWindowPos(pet.Handle, (IntPtr)(-1), 0, 0, 0, 0, 0x13);   // keep the car above its pipe
+        }
     }
 
     // Hover conversion: the wheels turn flat under the car (as on the time machine) and fire jets downwards.

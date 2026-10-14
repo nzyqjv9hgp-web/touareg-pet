@@ -18,14 +18,17 @@ public sealed class CarPlacement
     // The canvas is w x h pixels; the axle line sits at 70 % of its height like the sprite car's wheels did.
     public static CarPlacement Place(CarModel model, CarState s, Chassis.Body b, double scale, int w, int h)
     {
-        double ppu = PixelsPerUnit(model, scale), axle = s.Ground - model.WheelRadius * ppu;
-        int left = (int)Math.Floor(s.X - w / 2.0), top = (int)Math.Floor(axle - h * .7);
+        // The axle sits one tyre radius off the contact point, along the normal of the surface (a wall when Lean is 90).
+        double ppu = PixelsPerUnit(model, scale), lean = s.Lean * Math.PI / 180;
+        double axleX = s.X - Math.Sin(lean) * model.WheelRadius * ppu, axle = s.Ground - Math.Cos(lean) * model.WheelRadius * ppu;
+        int left = (int)Math.Floor(axleX - w / 2.0), top = (int)Math.Floor(axle - h * .7);
         // glTF (x left, y up, z forward) turns into the car frame by +90° about y.
         var toCar = Matrix4x4.CreateRotationY(MathF.PI / 2);
         const float rad = MathF.PI / 180;
         var unsprung = Matrix4x4.CreateRotationZ((float)s.Pitch * rad) * Matrix4x4.CreateRotationY((float)s.Yaw * rad)
+            * Matrix4x4.CreateRotationX((float)s.Spin * rad)
             * Matrix4x4.CreateScale((float)ppu) * Matrix4x4.CreateRotationX(Elevation)
-            * Matrix4x4.CreateTranslation((float)(s.X - left), (float)-(axle - top), 0);
+            * Matrix4x4.CreateTranslation((float)(axleX - left), (float)-(axle - top), 0);
         var sprung = toCar * Matrix4x4.CreateRotationX((float)b.Roll * rad) * Matrix4x4.CreateRotationZ((float)b.Pitch * rad)
             * Matrix4x4.CreateTranslation(0, (float)b.Lift, 0) * unsprung;
         var wheels = new Matrix4x4[model.Wheels.Length];

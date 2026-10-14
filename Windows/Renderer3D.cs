@@ -167,7 +167,7 @@ internal sealed class Renderer3D : IDisposable
         var b = chassis.Update(s, dt, CarPlacement.PixelsPerUnit(model, world.Scale), world.WheelSpin);
         var place = CarPlacement.Place(model, s, b, world.Scale, w, h);
         int left = place.Left, top = place.Top;
-        shadowStrength += ((s.Grounded ? .42f : 0) - shadowStrength) * (float)Math.Min(1, dt * 10);
+        shadowStrength += ((s.Grounded && Math.Abs(s.Lean) < 10 ? .42f : 0) - shadowStrength) * (float)Math.Min(1, dt * 10);
 
         Targets(w, h);
         context.ClearRenderTargetView(colorView!, new Color4(0, 0, 0, 0));

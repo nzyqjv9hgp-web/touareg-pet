@@ -7,15 +7,19 @@ public record Area(double Left, double Top, double Right, double Bottom, double 
 public record Pose(string Sequence, int Frame, double X, double Y, double Angle, int Direction, double Flip);
 // The car for the 3D renderer: Ground is the line the tyres sit on (or would, while airborne), Pitch is the body's
 // nose-up angle in degrees, Yaw 0 faces screen right and 180 faces left (90: the tail turned towards the viewer).
-// Hover is the wheel fold (0 down, 1 flat) and Thrust the jets under them.
+// Hover is the wheel fold (0 down, 1 flat) and Thrust the jets under them. Lean tilts the surface the tyres touch
+// (degrees, 90 = a right-hand wall): the axle sits off (X, Ground) along that surface's normal. Spin turns the car about
+// the screen's horizontal axis, the "air" over a quarter-pipe that shows its nose to the viewer.
 public readonly record struct CarState(double X, double Ground, bool Grounded, double Pitch, double Yaw, double Speed, Motion Phase, double PhaseTime,
-    double Hover = 0, double Thrust = 0);
+    double Hover = 0, double Thrust = 0, double Lean = 0, double Spin = 0);
 public record Ramp(double X, double Y, double Width, double Height, int Direction);
+// A quarter-pipe against a monitor wall: Wall is the wall's x, Floor the y it stands on, Side +1 for a right-hand wall.
+public record QuarterPipe(double Wall, double Floor, double Radius, int Side);
 public sealed record Particle(double X, double Y, double Vx, double Vy, double Radius, double Age, double Life);
 public sealed record Streak(double X, double Y, int Direction, double Age, double Length);
 // A bump worth hearing: Strength 0..1, Metal for wall hits, otherwise a landing thud.
 public sealed record Impact(double Strength, bool Metal);
-public enum Motion { Drive, Burnout, Jump, Land, Turn, Drag, Fall, Crash, Hover }
+public enum Motion { Drive, Burnout, Jump, Land, Turn, Drag, Fall, Crash, Hover, Pipe }
 
 public sealed class World
 {
@@ -39,6 +43,10 @@ public sealed class World
     double fy, vx, vy, grabX, grabY, cursorX, cursorY, swing, swingV, airTime, shake, bounce, hopTimer = 2;
     double driveClock, holdTime, rampGrow, hover, thrust, still, idleClock;
     Ramp? lastRamp;
+    QuarterPipe? pipe, shownPipe;
+    double pipeGrow, pipeS, pipeV, pipeTop, pipeAir, pipeG;
+    int pipeStage;
+    bool pipeDecided;
     bool driveOff, bounced, turnPuffed, hoverOn;
     public double X { get; private set; }
     public double Velocity { get; private set; }
@@ -53,6 +61,8 @@ public sealed class World
     public bool EngineArmed { get; private set; }
     public bool Paused { get; set; }
     public double CarWidth { get; set; } = 194;
+    // How often a wall gets a quarter-pipe instead of a crash (0 = never).
+    public double PipeChance { get; set; }
     public double Speed { get; set; } = 1;
     public double Scale => CarWidth / 440 * dpi / 96;
     public double WheelSpin { get; private set; }
@@ -129,7 +139,7 @@ public sealed class World
         var start = surfaces.FirstOrDefault(s => !s.Floor) ?? surfaces.FirstOrDefault();
         surface = null; target = null; hop = null; Phase = Motion.Drive; phaseAge = 0; Velocity = 0; Direction = 1;
         Held = false; EngineArmed = false; boost = 0; charge = 0; shake = 0; rampGrow = 0; lastRamp = null;
-        hoverOn = false; hover = thrust = 0;
+        hoverOn = false; hover = thrust = 0; pipe = null; pipeDecided = false;
         Particles.Clear(); Streaks.Clear(); Impacts.Clear();
         if (start is not null)
         {
@@ -168,7 +178,7 @@ public sealed class World
         // A floating car stays in hover mode when it is picked up again.
         if (Phase != Motion.Hover) hoverOn = false;
         var p = Pose; X = p.X; fy = p.Y; still = 0;
-        surface = null; target = null; hop = null;
+        surface = null; target = null; hop = null; pipe = null;
         Phase = Motion.Drag; phaseAge = 0; vx = vy = 0; swing = swingV = 0; pending = false;
         Velocity = 0; boost = 0; charge = 0; EngineArmed = false;
     }
@@ -194,7 +204,7 @@ public sealed class World
             vx = (b.X - a.X) * 240; vy = (b.Y - a.Y) * 240;
         }
         else { vx = Phase is Motion.Drive or Motion.Land ? Direction * Velocity : 0; vy = 0; }
-        X = p.X; fy = p.Y; surface = null; target = null; hop = null;
+        X = p.X; fy = p.Y; surface = null; target = null; hop = null; pipe = null;
         Phase = Motion.Fall; phaseAge = 0; airTime = 0; bounced = false;
     }
 
@@ -283,6 +293,10 @@ public sealed class World
         : new Ramp(plan.Takeoff - Direction * 78 * Unit, surface.Y, 68 * Unit, 30 * Unit, Direction);
 
     // The ramp unfolds before use and folds away after take-off.
+    // The quarter-pipe grows out of the wall before the car reaches it and folds away after it has left.
+    public QuarterPipe? CurrentPipe => shownPipe is null || pipeGrow <= 0 ? null : shownPipe with { Radius = shownPipe.Radius * Smooth(Math.Clamp(pipeGrow, 0, 1)) };
+    double PipeRadius => 220 * Unit;
+
     public Ramp? CurrentRamp => lastRamp is null || rampGrow <= 0 ? null : lastRamp with { Height = lastRamp.Height * Smooth(Math.Clamp(rampGrow, 0, 1)) };
 
     double GroundAt(double x)
@@ -344,6 +358,15 @@ public sealed class World
                 return new("jump", 3, X, fy, Direction * swing - JumpPitch[3], Direction, 1);
             if (Phase == Motion.Hover)
                 return new("drive", 0, X + jolt, fy + Bob, Direction * swing, Direction, 1);
+            if (Phase == Motion.Pipe)
+            {
+                // Sprites cannot turn through depth: tilt with the surface and flip like the old turnaround.
+                var (cx, cy, surfaceAngle) = PipeContact(); double lean = pipe!.Side * (pipeStage == 1 ? 90 : surfaceAngle) * Math.PI / 180;
+                double px = cx - Math.Sin(lean) * Contact * Scale, py = cy - Math.Cos(lean) * Contact * Scale;
+                double pitch = pipeStage == 0 ? surfaceAngle : pipeStage == 1 ? 90 : -surfaceAngle;
+                double flip = pipeStage == 1 ? Math.Cos(Math.PI * Smooth(Math.Clamp(pipeAir / PipeAirTime, 0, 1))) : 1;
+                return new("drive", (int)driveClock % 6, px, py, -pitch, Direction, flip);
+            }
             if (Phase == Motion.Fall)
             {
                 int i = vy < -250 * Unit ? 1 : vy < 250 * Unit ? 3 : 4;
@@ -442,6 +465,12 @@ public sealed class World
                     return new(X + Math.Sin(phaseAge * 75) * 5 * Unit * k, surface!.Y, true, 0, facing, -Direction * bounce, Phase, phaseAge);
                 case Motion.Turn:
                     return new(X, surface!.Y, true, 0, TurnYaw(phaseAge), 0, Phase, phaseAge);
+                case Motion.Pipe:
+                {
+                    var (cx, cy, angle) = PipeContact();
+                    return new(cx, cy, pipeStage != 1, pipeStage == 0 ? angle : pipeStage == 1 ? 90 : -angle, facing,
+                        Direction * pipeV, Phase, phaseAge, Lean: pipe!.Side * (pipeStage == 1 ? 90 : angle), Spin: pipeStage == 1 ? 180 * Smooth(Math.Clamp(pipeAir / PipeAirTime, 0, 1)) : 0);
+                }
                 default:
                     var ground = Ground();
                     return new(X, ground.Y + contact, true, -ground.Angle, facing, Phase == Motion.Burnout ? 0 : Direction * Velocity, Phase, phaseAge);
@@ -509,6 +538,8 @@ public sealed class World
             lastRamp = full; rampGrow = Math.Min(1, rampGrow + dt / .28);
         }
         else if ((rampGrow = Math.Max(0, rampGrow - dt / .3)) == 0) lastRamp = null;
+        if (pipe is not null) { shownPipe = pipe; pipeGrow = Math.Min(1, pipeGrow + dt / .35); }
+        else if ((pipeGrow = Math.Max(0, pipeGrow - dt / .45)) == 0) shownPipe = null;
         hover = Approach(hover, hoverOn ? 1 : 0, dt / .45);
         thrust = Approach(thrust, hoverOn && hover > .3 ? 1 : 0, dt / .25);
         if (thrust > 0 && Phase is Motion.Drag or Motion.Hover)
@@ -520,6 +551,7 @@ public sealed class World
         if (Phase == Motion.Drag) { DragTick(dt); return; }
         if (Phase == Motion.Fall) { FallTick(dt); return; }
         if (Phase == Motion.Hover) { HoverTick(dt); return; }
+        if (Phase == Motion.Pipe) { PipeTick(dt); return; }
         if (Phase == Motion.Burnout)
         {
             charge = Math.Clamp(phaseAge / 1.8, 0, 1); WheelSpin += dt * (24 + charge * 10);
@@ -602,15 +634,27 @@ public sealed class World
         hop = Validate(hop);
         var plan = hop ?? EdgeJump();
         var (mode, wall) = plan is null ? EdgeMode(s) : (Edge.Turn, edge);
+        // Heading for a monitor wall: sometimes a quarter-pipe grows out of it and the car floors it.
+        if (mode != Edge.Wall || plan is not null) { pipe = null; pipeDecided = false; }
+        else if (!pipeDecided)
+        {
+            pipeDecided = true;
+            if (random.NextDouble() < PipeChance && PipeFits(s, wall)) pipe = new(wall, s.Y, PipeRadius, Direction);
+        }
         double endpoint = Direction > 0 ? s.Right - Half - 12 * Unit : s.Left + Half + 12 * Unit;
         double distance = Math.Max(0, Direction * (endpoint - X));
         double goal = 165 * Unit * Speed * (boost > 0 ? 2.15 + .65 * charge : 1);
         if (plan is null && mode == Edge.Turn) goal = Math.Min(goal, Math.Sqrt(2 * 780 * Unit * distance));
-        Velocity = Approach(Velocity, goal, (Velocity < goal ? boost > 0 ? 1000 : 240 : 800) * Unit * dt);
+        if (pipe is not null) goal = 736 * Unit;
+        Velocity = Approach(Velocity, goal, (Velocity < goal ? boost > 0 || pipe is not null ? 1000 : 240 : 800) * Unit * dt);
         X += Direction * Velocity * dt; WheelSpin += Velocity / (Contact * Scale) * dt;
         if (plan is not null)
         {
             if (Direction * (plan.Takeoff - X) <= 65 * Unit) Fly(plan);
+        }
+        else if (pipe is not null)
+        {
+            if (Direction * (X - (pipe.Wall - Direction * pipe.Radius)) >= 0) EnterPipe();
         }
         else if (mode == Edge.Wall)
         {
@@ -622,6 +666,77 @@ public sealed class World
         }
         else if (mode == Edge.Turn && (Direction * (X - endpoint) >= 0 || (distance < 1.4 * Unit && Velocity < 17 * Unit)))
             StartTurn();
+    }
+
+    // Room for the ride: a run-up to build speed and, above the wall's lip, space for the air.
+    bool PipeFits(Surface s, double wall)
+    {
+        double run = Math.Abs(wall - X) - PipeRadius, top = ScreenAt(wall, s.Y - 10)?.Top ?? double.NegativeInfinity;
+        // At full speed the lip is cleared at about this speed; the car then stands a whole length tall above it.
+        double lip = Math.Sqrt(Math.Max(Math.Pow(736 * Unit, 2) - 2 * PipeRampGravity * Unit * PipeRadius, Math.Pow(PipeMinTop * Unit, 2)));
+        return run > 140 * Unit && s.Y - PipeRadius - PipeAirHeight(lip) - 2 * Half - 20 * Unit > top;
+    }
+
+    const double PipeAirGravity = 900, PipeRampGravity = 700, PipeMinTop = 300;
+    double PipeAirHeight(double topSpeed) => topSpeed * topSpeed / (2 * PipeAirGravity * Unit);
+    double PipeAirTime => 2 * pipeTop / (PipeAirGravity * Unit);
+
+    void EnterPipe()
+    {
+        Phase = Motion.Pipe; phaseAge = 0; pipeStage = 0; pipeS = 0; pipeV = Velocity; pipeAir = 0; EngineArmed = true;
+        // Slow down on the way up just enough to still clear the lip, however fast the car came in.
+        double spare = pipeV * pipeV - PipeMinTop * PipeMinTop * Unit * Unit;
+        pipeG = spare > 0 ? Math.Min(PipeRampGravity * Unit, spare / (2 * pipe!.Radius)) : 0;
+    }
+
+    // Where the tyres touch the quarter-pipe (raised to the chord between the axles) and the surface angle in degrees.
+    (double X, double Y, double Angle) PipeContact()
+    {
+        var p = pipe!; double r = p.Radius;
+        if (pipeStage == 1)
+        {
+            double h = pipeTop * pipeAir - .5 * PipeAirGravity * Unit * pipeAir * pipeAir;
+            return (p.Wall, p.Floor - r - Math.Max(0, h), 90);
+        }
+        double theta = Math.Clamp(pipeS / r, 0, Math.PI / 2), half = 125 * Scale;
+        double sag = r - Math.Sqrt(Math.Max(0, r * r - half * half));
+        double nx = -p.Side * Math.Sin(theta), ny = -Math.Cos(theta);
+        double x = p.Wall - p.Side * r + p.Side * r * Math.Sin(theta), y = p.Floor - r + r * Math.Cos(theta);
+        return (x + nx * sag, y + ny * sag, theta * 180 / Math.PI);
+    }
+
+    void PipeTick(double dt)
+    {
+        var p = pipe!; double r = p.Radius, quarter = r * Math.PI / 2;
+        if (pipeStage == 0)
+        {
+            pipeV = Math.Max(PipeMinTop * Unit * .9, pipeV - pipeG * Math.Sin(pipeS / r) * dt);
+            pipeS += pipeV * dt; WheelSpin += pipeV / (Contact * Scale) * dt;
+            if (pipeS >= quarter) { pipeS = quarter; pipeStage = 1; pipeAir = 0; pipeTop = pipeV; }
+        }
+        else if (pipeStage == 1)
+        {
+            // Over the lip: straight up and back, turning round through depth on the way.
+            pipeAir += dt; WheelSpin += dt * 4;
+            if (pipeAir >= PipeAirTime)
+            {
+                pipeStage = 2; Direction *= -1; pipeS = quarter; pipeV = pipeTop; Bang(.22, false);
+                for (int i = 0; i < 6; i++) Puff(p.Wall - p.Side * 6 * Unit, p.Floor - r - (random.NextDouble() * 30) * Unit, true, -p.Side * 50 * Unit);
+            }
+        }
+        else
+        {
+            pipeV += pipeG * Math.Sin(pipeS / r) * dt;
+            pipeS -= pipeV * dt; WheelSpin += pipeV / (Contact * Scale) * dt;
+            if (pipeS <= 0)
+            {
+                // Back on the flat, driving away from the wall; the pipe folds away behind.
+                X = p.Wall - p.Side * r; Velocity = Math.Min(pipeV, 420 * Unit);
+                Phase = Motion.Drive; phaseAge = 0; pipe = null; pipeDecided = true; Decide();
+                return;
+            }
+        }
+        X = PipeContact().X;
     }
 
     void StartTurn() { Velocity = 0; Phase = Motion.Turn; phaseAge = 0; EngineArmed = false; boost = 0; turnPuffed = false; }

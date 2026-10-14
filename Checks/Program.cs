@@ -216,6 +216,40 @@ Assert(browse.SurfaceId == idA && Math.Abs(browse.State.Ground - 520) < .001 && 
 browse.SetSurfaces([taskbar]);
 Assert(browse.Phase == Motion.Fall, "A block scrolled out of view drops the car");
 
+var skate = new World { PipeChance = 1 }; skate.SetScreens([monitor]); skate.SetSurfaces([taskbar]);
+var skateChassis = new Chassis(2.6, .36);
+bool piped = false, spun = false, grew = false, folded = false; int facingIn = 0; double highest = 1e9, pipeRadius = 0;
+for (int i = 0; i < 120 * 40 && !folded; i++)
+{
+    skate.Step(1.0 / 120); AssertFinite(skate.Pose);
+    var s = skate.State; var sb = skateChassis.Update(s, 1.0 / 120, ppu0(skate), skate.WheelSpin);
+    if (!double.IsFinite(s.X + s.Ground + s.Pitch + s.Lean + s.Spin + sb.Lift + sb.Pitch)) throw new Exception("Nonfinite pipe state");
+    if (skate.CurrentPipe is { } pp) { grew = true; pipeRadius = Math.Max(pipeRadius, pp.Radius); }
+    if (skate.Phase == Motion.Pipe)
+    {
+        if (!piped) facingIn = skate.Direction;
+        piped = true; highest = Math.Min(highest, s.Ground);
+        if (Math.Abs(s.Spin - 90) < 10) spun = true;
+    }
+    if (piped && skate.Phase == Motion.Drive && skate.CurrentPipe is null) folded = true;
+}
+double ppu0(World w) => w.Scale * 440 / 4.88;
+Assert(grew && piped && spun && highest < 1040 - pipeRadius - 40, "At the wall a quarter-pipe grows, the car rides it, flies over the lip and turns round in the air");
+Assert(folded && skate.Direction == -facingIn && skate.Crashes == 0 && skate.SurfaceId == -1, "It comes back down the pipe driving the other way, no crash, and the pipe folds away");
+var small = new World { PipeChance = 1 }; small.SetScreens([new(0, 0, 1024, 768)]); small.SetSurfaces([new(-1, 8, 1016, 720, Floor: true)]);
+bool smallPipe = false; double smallTop = 1e9;
+for (int i = 0; i < 120 * 40 && !(smallPipe && small.Phase == Motion.Drive); i++)
+{
+    small.Step(1.0 / 120);
+    if (small.Phase == Motion.Pipe) { smallPipe = true; smallTop = Math.Min(smallTop, small.Pose.Y); }
+}
+Assert(smallPipe && smallTop > 0, "A 1024x768 screen still has room for the quarter-pipe air");
+var grabbed = new World { PipeChance = 1 }; grabbed.SetScreens([monitor]); grabbed.SetSurfaces([taskbar]);
+for (int i = 0; i < 120 * 40 && grabbed.Phase != Motion.Pipe; i++) grabbed.Step(1.0 / 120);
+Tick(grabbed, .3); var onPipe = grabbed.Pose; grabbed.Grab(onPipe.X, onPipe.Y); grabbed.Hold(true); grabbed.BeginDrag();
+Tick(grabbed, .6);
+Assert(grabbed.Dragging && grabbed.CurrentPipe is null, "Picking the car up off the quarter-pipe folds the pipe away");
+
 var drive3d = new World(); drive3d.SetScreens([monitor]); drive3d.SetSurfaces([new(5, 300, 1500, 700), taskbar]);
 var chassis = new Chassis(2.6, .36);
 double ppu = drive3d.Scale * 440 / 4.88, minPitch = 0, maxLift = 0, minLift = 0, burnRear = 0, burnFront = 0;

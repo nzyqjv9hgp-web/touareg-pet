@@ -12,6 +12,7 @@ internal sealed class Settings
     public bool AutoUpdate { get; set; } = true;
     public bool HideFullscreen { get; set; } = true;
     public bool Pages { get; set; } = true;
+    public bool Pipes { get; set; } = true;
     public bool Startup { get; set; }
     internal static Settings Load()
     {

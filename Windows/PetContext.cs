@@ -7,7 +7,7 @@ internal sealed class PetContext : ApplicationContext
 {
     readonly Settings settings = Settings.Load();
     readonly World world = new();
-    readonly LayerWindow pet = new(false), effects = new(true);
+    readonly LayerWindow pet = new(false), effects = new(true), pipeLayer = new(true);
     readonly Sprites sprites = new();
     readonly EngineAudio audio = new();
     readonly Updater updater = new();
@@ -48,7 +48,7 @@ internal sealed class PetContext : ApplicationContext
         audio.Error += message => pet.BeginInvoke(() => { Log.Write("audio", new Exception(message)); Balloon("Звук пока недоступен. Питомец продолжает работать."); });
         updater.Changed += () => { restart.Visible = updater.Ready; preferences?.UpdateStatus(updater.Status); };
         Apply(); Rescan();
-        effects.Show(); pet.Show(); renderer.Draw(world, pet, effects, 0);
+        effects.Show(); pet.Show(); renderer.Draw(world, pet, effects, pipeLayer, 0);
         frames = new(pet, Tick);
         updateTimer.Tick += async (_, _) =>
         {
@@ -63,7 +63,7 @@ internal sealed class PetContext : ApplicationContext
     void Apply()
     {
         world.CarWidth = settings.Size; world.Speed = settings.Speed / 100.0; watcher.CarWidth = settings.Size;
-        pages.CarWidth = settings.Size; pages.Enabled = settings.Pages;
+        pages.CarWidth = settings.Size; pages.Enabled = settings.Pages; world.PipeChance = settings.Pipes ? .7 : 0;
     }
     void Rescan() => Use(watcher.Scan(settings.Size));
     void Use(DesktopWatcher.Snapshot snapshot)
@@ -83,7 +83,7 @@ internal sealed class PetContext : ApplicationContext
         if (next != hidden)
         {
             hidden = next;
-            if (hidden) { world.Hold(false); pet.Capture = false; pet.Hide(); effects.Hide(); }
+            if (hidden) { world.Hold(false); pet.Capture = false; pet.Hide(); effects.Hide(); pipeLayer.Hide(); }
             else { effects.Show(); pet.Show(); }
         }
         if (topmost >= .5) { topmost = 0; Native.SetWindowPos(pet.Handle, (IntPtr)(-1), 0, 0, 0, 0, 0x13); }
@@ -98,7 +98,7 @@ internal sealed class PetContext : ApplicationContext
         }
         if (!hidden) world.Step(dt);
         audio.Sync(world, settings, hidden);
-        if (!hidden) renderer.Draw(world, pet, effects, dt);
+        if (!hidden) renderer.Draw(world, pet, effects, pipeLayer, dt);
     }
     void Preferences()
     {
@@ -114,7 +114,7 @@ internal sealed class PetContext : ApplicationContext
         if (disposed) return; disposed = true;
         frames.Dispose(); watcher.Dispose(); pages.Dispose(); updateTimer.Stop(); settings.Save(); world.Hold(false);
         tray.Visible = false; tray.Dispose(); audio.Dispose(); renderer.Dispose(); sprites.Dispose();
-        preferences?.Dispose(); pet.Dispose(); effects.Dispose(); updateTimer.Dispose();
+        preferences?.Dispose(); pet.Dispose(); effects.Dispose(); pipeLayer.Dispose(); updateTimer.Dispose();
         base.ExitThreadCore();
     }
 }

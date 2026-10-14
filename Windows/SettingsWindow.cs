@@ -9,7 +9,7 @@ internal sealed class SettingsWindow : Form
     internal event Action? CheckUpdates;
     internal SettingsWindow(Settings s, string updateStatus)
     {
-        Text = "Touareg — настройки"; Icon = Assets.Icon(); ClientSize = new(540, 581);
+        Text = "Touareg — настройки"; Icon = Assets.Icon(); ClientSize = new(540, 612);
         StartPosition = FormStartPosition.CenterScreen; FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false; Font = new("Segoe UI", 10); BackColor = Color.FromArgb(245, 247, 251);
         AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
@@ -28,13 +28,14 @@ internal sealed class SettingsWindow : Form
         });
         Check("Автоматически получать обновления", 395, s.AutoUpdate, v => { s.AutoUpdate = v; Changed?.Invoke(); });
         Check("Ездить по блокам страниц в браузере", 426, s.Pages, v => { s.Pages = v; Changed?.Invoke(); });
-        status = new() { Text = updateStatus, Location = new(28, 462), Size = new(355, 43), Font = new("Segoe UI", 9), ForeColor = Color.FromArgb(83, 99, 121) };
+        Check("Квартерпайпы у стен экрана", 457, s.Pipes, v => { s.Pipes = v; Changed?.Invoke(); });
+        status = new() { Text = updateStatus, Location = new(28, 493), Size = new(355, 43), Font = new("Segoe UI", 9), ForeColor = Color.FromArgb(83, 99, 121) };
         Controls.Add(status);
-        var check = new Button { Text = "Проверить", Location = new(397, 462), Size = new(115, 32), FlatStyle = FlatStyle.Flat };
+        var check = new Button { Text = "Проверить", Location = new(397, 493), Size = new(115, 32), FlatStyle = FlatStyle.Flat };
         check.Click += (_, _) => CheckUpdates?.Invoke(); Controls.Add(check);
-        var credits = new LinkLabel { Text = "Авторы модели, звука и лицензии", Location = new(28, 529), AutoSize = true };
+        var credits = new LinkLabel { Text = "Авторы модели, звука и лицензии", Location = new(28, 560), AutoSize = true };
         credits.LinkClicked += (_, _) => Credits(); Controls.Add(credits);
-        Controls.Add(new Label { Text = "v" + Install.Version + " · Windows", Location = new(395, 531), Size = new(125, 22), ForeColor = Color.Gray });
+        Controls.Add(new Label { Text = "v" + Install.Version + " · Windows", Location = new(395, 562), Size = new(125, 22), ForeColor = Color.Gray });
     }
     internal void UpdateStatus(string text) { if (!IsDisposed) status.Text = text; }
     void Check(string text, int y, bool value, Action<bool> change)

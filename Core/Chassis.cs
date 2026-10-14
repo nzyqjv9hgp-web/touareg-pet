@@ -40,7 +40,8 @@ public sealed class Chassis(double wheelbase, double wheelRadius)
         {
             // Touchdown: the springs take the fall, and the body keeps its flight pitch until they push it level.
             hv += Math.Min(2.2, Math.Max(0, groundSpeed) * .25);
-            p += (lastPitch - s.Pitch) * Math.PI / 180;
+            // Keep the flight pitch into the springs, unless the pose itself turned round (a quarter-pipe air).
+            if (Math.Abs(lastPitch - s.Pitch) < 60) p += (lastPitch - s.Pitch) * Math.PI / 180;
         }
         if (s.Phase == Motion.Crash && lastPhase != Motion.Crash)
         {
