@@ -244,6 +244,13 @@ for (int i = 0; i < 120 * 40 && !(smallPipe && small.Phase == Motion.Drive); i++
     if (small.Phase == Motion.Pipe) { smallPipe = true; smallTop = Math.Min(smallTop, small.Pose.Y); }
 }
 Assert(smallPipe && smallTop > 0, "A 1024x768 screen still has room for the quarter-pipe air");
+var again = new World { PipeChance = 1 }; again.SetScreens([monitor]); again.SetSurfaces([taskbar]);
+int rides = 0; Motion lastPhase = again.Phase;
+for (int i = 0; i < 120 * 60; i++) { again.Step(1.0 / 120); if (again.Phase == Motion.Pipe && lastPhase != Motion.Pipe) rides++; lastPhase = again.Phase; }
+Assert(rides >= 3 && again.Crashes == 0, "Every wall gets a new quarter-pipe, ride after ride");
+var mixed = new World { PipeChance = .5 }; mixed.SetScreens([monitor]); mixed.SetSurfaces([taskbar]); rides = 0; lastPhase = mixed.Phase;
+for (int i = 0; i < 120 * 120; i++) { mixed.Step(1.0 / 120); if (mixed.Phase == Motion.Pipe && lastPhase != Motion.Pipe) rides++; lastPhase = mixed.Phase; }
+Assert(rides >= 2 && mixed.Crashes >= 1, "With a chance below 1 walls mix quarter-pipes and crashes");
 var grabbed = new World { PipeChance = 1 }; grabbed.SetScreens([monitor]); grabbed.SetSurfaces([taskbar]);
 for (int i = 0; i < 120 * 40 && grabbed.Phase != Motion.Pipe; i++) grabbed.Step(1.0 / 120);
 Tick(grabbed, .3); var onPipe = grabbed.Pose; grabbed.Grab(onPipe.X, onPipe.Y); grabbed.Hold(true); grabbed.BeginDrag();

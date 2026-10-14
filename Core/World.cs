@@ -45,8 +45,7 @@ public sealed class World
     Ramp? lastRamp;
     QuarterPipe? pipe, shownPipe;
     double pipeGrow, pipeS, pipeV, pipeTop, pipeAir, pipeG;
-    int pipeStage;
-    bool pipeDecided;
+    int pipeStage, pipeDecided;   // pipeDecided: the direction the wall ahead was already judged for (0: not yet)
     bool driveOff, bounced, turnPuffed, hoverOn;
     public double X { get; private set; }
     public double Velocity { get; private set; }
@@ -139,7 +138,7 @@ public sealed class World
         var start = surfaces.FirstOrDefault(s => !s.Floor) ?? surfaces.FirstOrDefault();
         surface = null; target = null; hop = null; Phase = Motion.Drive; phaseAge = 0; Velocity = 0; Direction = 1;
         Held = false; EngineArmed = false; boost = 0; charge = 0; shake = 0; rampGrow = 0; lastRamp = null;
-        hoverOn = false; hover = thrust = 0; pipe = null; pipeDecided = false;
+        hoverOn = false; hover = thrust = 0; pipe = null; pipeDecided = 0;
         Particles.Clear(); Streaks.Clear(); Impacts.Clear();
         if (start is not null)
         {
@@ -635,10 +634,10 @@ public sealed class World
         var plan = hop ?? EdgeJump();
         var (mode, wall) = plan is null ? EdgeMode(s) : (Edge.Turn, edge);
         // Heading for a monitor wall: sometimes a quarter-pipe grows out of it and the car floors it.
-        if (mode != Edge.Wall || plan is not null) { pipe = null; pipeDecided = false; }
-        else if (!pipeDecided)
+        if (mode != Edge.Wall || plan is not null) { pipe = null; pipeDecided = 0; }
+        else if (pipeDecided != Direction && Direction * (wall - X) < 700 * Unit)
         {
-            pipeDecided = true;
+            pipeDecided = Direction;
             if (random.NextDouble() < PipeChance && PipeFits(s, wall)) pipe = new(wall, s.Y, PipeRadius, Direction);
         }
         double endpoint = Direction > 0 ? s.Right - Half - 12 * Unit : s.Left + Half + 12 * Unit;
@@ -732,7 +731,7 @@ public sealed class World
             {
                 // Back on the flat, driving away from the wall; the pipe folds away behind.
                 X = p.Wall - p.Side * r; Velocity = Math.Min(pipeV, 420 * Unit);
-                Phase = Motion.Drive; phaseAge = 0; pipe = null; pipeDecided = true; Decide();
+                Phase = Motion.Drive; phaseAge = 0; pipe = null; pipeDecided = 0; Decide();
                 return;
             }
         }
