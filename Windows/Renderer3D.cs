@@ -180,7 +180,9 @@ internal sealed class Renderer3D : IDisposable
         context.PSSetSampler(0, sampler);
 
         var viewProj = new Matrix4x4(2f / w, 0, 0, 0, 0, 2f / h, 0, 0, 0, 0, -1 / (2 * Depth), 0, -1, 1, .5f, 1);
-        var frame = new FrameData { ViewProj = viewProj, Light = new(Vector3.Normalize(new(-.35f, .85f, .45f)), 0), Paint = new(PaintColor, 1) };
+        // The studio around the car turns a little as it travels, so reflections slide over the body while it drives.
+        float studio = (float)(s.X / CarPlacement.PixelsPerUnit(model, world.Scale) * .09);
+        var frame = new FrameData { ViewProj = viewProj, Light = new(Vector3.Normalize(new(-.35f, .85f, .45f)), 0), Paint = new(PaintColor, studio) };
         context.UpdateSubresource(in frame, frameBuffer);
 
         context.OMSetBlendState(premultiplied); context.OMSetDepthStencilState(depthRead);
@@ -251,13 +253,20 @@ internal sealed class Renderer3D : IDisposable
             return o;
         }
 
+        // Photo-studio surroundings: bright sky, a crisp horizon that darkens the lower body, a dark floor and long
+        // light strips that show as streaks on the paint. Paint.w turns it with the car's travel.
         float3 Sky(float3 d)
         {
-            float3 zenith = float3(0.30, 0.42, 0.62), horizon = float3(0.95, 0.96, 0.98), ground = float3(0.05, 0.05, 0.06);
-            float3 c = d.y >= 0 ? lerp(horizon, zenith, pow(saturate(d.y), 0.6)) : lerp(horizon * 0.45, ground, pow(saturate(-d.y), 0.4));
-            c += 3.0 * pow(saturate(dot(d, normalize(float3(-0.35, 0.75, 0.55)))), 60);
-            c += 1.2 * pow(saturate(dot(d, normalize(float3(0.6, 0.4, 0.7)))), 30);
-            return c;
+            float s = sin(Paint.w), c = cos(Paint.w);
+            d = float3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
+            float3 zenith = float3(0.32, 0.45, 0.66), horizon = float3(1.0, 1.0, 1.02), ground = float3(0.04, 0.04, 0.05);
+            float3 col = d.y >= 0 ? lerp(horizon, zenith, pow(saturate(d.y), 0.45))
+                                  : lerp(float3(0.22, 0.22, 0.24), ground, pow(saturate(-d.y * 4), 0.5));
+            float az = atan2(d.x, d.z);
+            col += 2.4 * smoothstep(0.07, 0.0, abs(d.y - 0.5)) * saturate(0.5 + 0.5 * sin(az * 2.0 + 0.6));
+            col += 1.6 * smoothstep(0.05, 0.0, abs(d.y - 0.18)) * saturate(0.5 + 0.5 * sin(az * 3.0 - 1.1));
+            col += 3.0 * pow(saturate(dot(d, normalize(float3(-0.35, 0.75, 0.55)))), 60);
+            return col;
         }
 
         float4 PS(VOut i) : SV_Target
